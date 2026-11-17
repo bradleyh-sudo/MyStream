@@ -158,6 +158,14 @@ a{color:var(--accent)}
 .tile .star{position:absolute;right:5px;top:5px;width:34px;height:34px;background:rgba(0,0,0,.55);color:#fff}
 .tile .star.on{color:#f5b942}
 .tile .star.busy svg{animation:spin 1s linear infinite;opacity:.7}
+.banner{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:12px;padding:10px 6px 10px 14px;margin:2px 0 12px;font-size:14px;box-shadow:var(--shadow)}
+.banner span{flex:1}
+.banner .x{color:var(--muted);height:32px;padding:0 8px}
+.acct{display:flex;flex-direction:column;gap:10px}
+.acct .field input{height:46px;font-size:17px}
+.linkish{color:var(--accent);font-weight:600;padding:6px;font-size:15px}
+.err.okmsg{color:var(--good)}
+.sheet h3+p{margin-top:-4px}
 .count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;align-self:flex-start;padding-top:2px}
 .empty{text-align:center;color:var(--muted);padding:56px 16px}
 .empty h2{color:var(--text);font-size:20px;margin-bottom:6px}
@@ -232,8 +240,12 @@ function loadDb() {
   try { const v = JSON.parse(localStorage.getItem(KEY)); if (v && v.shows) return v; } catch {}
   return { shows: {} };
 }
-function saveDb() {
+function writeLocal() {
   try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { toast("Couldn't save — storage is full or blocked."); }
+}
+function saveDb() {
+  writeLocal();
+  if (typeof onLocalChange === "function") onLocalChange();
 }
 
 /* ---------- TVMaze API (free, no key) ---------- */
@@ -438,6 +450,9 @@ function renderHome() {
       <button class="icon-btn" id="menuBtn" aria-label="Menu">${ICON.more}</button>
       <button class="btn" id="addBtn">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add show</button>
     </header>
+    ${account.enabled && account.ready && !account.user && !settings().hideAcctBanner ? `<div class="banner">
+        <span>Save your list to a free account so it's safe and on all your devices.</span>
+        <button class="btn small" id="bannerGo">Sign up</button><button class="x" id="bannerX" aria-label="Dismiss">✕</button></div>` : ""}
     ${shows.length || movies.length ? `
       <div class="toolbar">
         ${services.length > 1 ? `<div class="chips">${["All", ...services].map(s => `<button class="chip ${s === filter ? "on" : ""}" data-f="${esc(s)}">${esc(s)}</button>`).join("")}</div>` : `<div class="chips"></div>`}
@@ -458,6 +473,10 @@ function renderHome() {
   $("#addBtn").onclick = () => go("/add");
   $("#addBtn2") && ($("#addBtn2").onclick = () => go("/add"));
   $("#menuBtn").onclick = openMainMenu;
+  if ($("#bannerGo")) {
+    $("#bannerGo").onclick = () => openAccountSheet("register");
+    $("#bannerX").onclick = () => { settings().hideAcctBanner = true; saveDb(); renderHome(); };
+  }
   app.querySelectorAll(".chip").forEach(c => c.onclick = () => { filter = c.dataset.f; renderHome(); });
   app.querySelectorAll("[data-view]").forEach(b => b.onclick = () => { settings().view = b.dataset.view; saveDb(); renderHome(); });
   app.querySelectorAll("[data-show]").forEach(c => c.onclick = e => {
@@ -507,27 +526,42 @@ function cardHtml({ s, st }) {
     ${starBtn(true, s.name)}
   </div>`;
 }
-let refreshing = false;
+let refreshing = false, refreshAgain = false;
 async function backgroundRefresh() {
-  if (refreshing) return;
+  if (refreshing) { refreshAgain = true; return; }
   refreshing = true;
   let changed = false;
-  for (const id of Object.keys(db.shows)) {
-    try { if (await refreshShow(id)) changed = true; } catch {}
-  }
+  do {
+    refreshAgain = false;
+    for (const id of Object.keys(db.shows)) {
+      try { if (await refreshShow(id)) changed = true; } catch {}
+    }
+  } while (refreshAgain);
   refreshing = false;
-  if (changed && !location.hash.replace(/^#\/?/, "")) renderHome();
+  if (changed) refreshQuiet();
 }
 
 function openMainMenu() {
+  const u = account.user;
   sheet(`
-    <h3>Backup</h3>
-    <p>Your shows are saved in this browser only. Export a backup file to keep them safe or move them to another device.</p>
-    <button class="btn" data-a="export">Export backup</button>
+    <h3>Account</h3>
+    ${!account.enabled ? `<p>Accounts aren't switched on for this copy of the app yet.</p>`
+      : u ? `<p>Signed in as <b>${esc(u.email)}</b>.<br><span id="syncLine">${esc(syncStatusText())}</span></p>
+             <button class="btn ghost" data-a="signout">Sign out</button>`
+          : `<p>Create a free account to save your shows and movies, and see them on any phone or computer.</p>
+             <button class="btn" data-a="register">Create account</button>
+             <button class="btn ghost" data-a="signin">Sign in</button>`}
+    <h3 style="margin-top:8px">Backup</h3>
+    <p>${u ? "Your list is saved to your account. You can also export a backup file." : "Without an account, your shows are saved in this browser only. Export a backup file to keep them safe or move them to another device."}</p>
+    <button class="btn ghost" data-a="export">Export backup</button>
     <button class="btn ghost" data-a="import">Import backup</button>
   `, (m, close) => {
-    m.querySelector('[data-a="export"]').onclick = () => { exportBackup(); close(); };
-    m.querySelector('[data-a="import"]').onclick = () => { close(); $("#importFile").click(); };
+    const on = (a, f) => { const b = m.querySelector(`[data-a="${a}"]`); if (b) b.onclick = f; };
+    on("export", () => { exportBackup(); close(); });
+    on("import", () => { close(); $("#importFile").click(); });
+    on("register", () => { close(); openAccountSheet("register"); });
+    on("signin", () => { close(); openAccountSheet("signin"); });
+    on("signout", () => { close(); confirmSignOut(); });
   });
 }
 function exportBackup() {
@@ -546,7 +580,7 @@ $("#importFile").onchange = async e => {
     if (!data || typeof data.shows !== "object") throw 0;
     const n = Object.keys(data.shows).length;
     if (!confirm(`Replace your current list with ${n} show${n === 1 ? "" : "s"} from this backup?`)) return;
-    db = data; saveDb(); render(); toast("Backup restored.");
+    db = { ...data, linkedUid: db.linkedUid, deviceId: db.deviceId, dirty: false }; saveDb(); render(); toast("Backup restored.");
   } catch { toast("That file isn't a My Shows backup."); }
 };
 
@@ -1136,7 +1170,246 @@ function showMenu(id) {
   });
 }
 
+/* ---------- accounts & sync (Firebase) ---------- */
+// Paste the web app config from Firebase console → Project settings → Your apps.
+// These values are not secret; your data is protected by the Firestore rules (see firestore.rules).
+const FIREBASE_CONFIG = null;
+const FB_SDK = "https://www.gstatic.com/firebasejs/13.2.0/";
+const account = { enabled: !!(FIREBASE_CONFIG || window.MYSHOWS_TEST_BACKEND), ready: false, user: null, lastSync: 0, error: "", syncing: false };
+let backend = null, unwatch = null, pushTimer = null, applyingRemote = false;
+
+async function loadBackend() {
+  if (window.MYSHOWS_TEST_BACKEND) return window.MYSHOWS_TEST_BACKEND;
+  if (!FIREBASE_CONFIG) return null;
+  const [{ initializeApp }, A, F] = await Promise.all(["firebase-app.js", "firebase-auth.js", "firebase-firestore.js"].map(f => import(FB_SDK + f)));
+  const app = initializeApp(FIREBASE_CONFIG);
+  const auth = A.getAuth(app), fs = F.getFirestore(app);
+  const ref = uid => F.doc(fs, "users", uid);
+  return {
+    onAuth: cb => A.onAuthStateChanged(auth, u => cb(u ? { uid: u.uid, email: u.email } : null)),
+    signIn: (e, p) => A.signInWithEmailAndPassword(auth, e, p),
+    signUp: (e, p) => A.createUserWithEmailAndPassword(auth, e, p),
+    reset: e => A.sendPasswordResetEmail(auth, e),
+    signOut: () => A.signOut(auth),
+    load: async uid => { const snap = await F.getDoc(ref(uid)); return snap.exists() ? snap.data() : null; },
+    save: (uid, data) => F.setDoc(ref(uid), data),
+    watch: (uid, cb, onErr) => F.onSnapshot(ref(uid), snap => { if (!snap.metadata.hasPendingWrites) cb(snap.exists() ? snap.data() : null); }, onErr)
+  };
+}
+function deviceId() {
+  if (!db.deviceId) { db.deviceId = Math.random().toString(36).slice(2, 10); writeLocal(); }
+  return db.deviceId;
+}
+// What gets saved to the account: your list, not the cached episode guides (those re-download from TVMaze).
+function cloudData() {
+  const shows = {};
+  for (const [id, sh] of Object.entries(db.shows)) {
+    const { episodes, fetchedAt, defaultService, ...keep } = sh;
+    shows[id] = keep;
+  }
+  const st = settings();
+  const out = { v: 1, updatedAt: Date.now(), device: deviceId(), shows, movies: db.movies || {},
+                settings: { view: st.view, region: st.region, tmdbKey: st.tmdbKey } };
+  return JSON.parse(JSON.stringify(out)); // drops undefined values (Firestore rejects them)
+}
+// Short fingerprint of the list, remembered on the device, to tell whether anything changed since the last sync.
+function userSig() {
+  const c = cloudData(); delete c.updatedAt; delete c.device;
+  const str = JSON.stringify(c);
+  let h = 5381; for (let i = 0; i < str.length; i++) h = (h * 33 ^ str.charCodeAt(i)) >>> 0;
+  return h.toString(36) + "." + str.length;
+}
+function markSynced() { db.syncedSig = userSig(); db.dirty = false; writeLocal(); }
+function applyCloud(data) {
+  applyingRemote = true;
+  const old = db.shows, shows = {};
+  for (const [id, sh] of Object.entries(data.shows || {}))
+    shows[id] = { episodes: (old[id] && old[id].episodes) || [], fetchedAt: (old[id] && old[id].fetchedAt) || 0, ...sh };
+  db.shows = shows;
+  db.movies = data.movies || {};
+  const st = settings();
+  for (const [k, v] of Object.entries(data.settings || {})) if (v !== undefined && v !== null && v !== "") st[k] = v;
+  applyingRemote = false;
+  markSynced();
+}
+// First time this device signs in to an account: combine both lists so nothing is lost.
+function mergeLocalInto(cloud) {
+  const out = JSON.parse(JSON.stringify(cloud));
+  out.shows = out.shows || {}; out.movies = out.movies || {}; out.settings = out.settings || {};
+  const local = cloudData();
+  for (const [id, sh] of Object.entries(local.shows)) {
+    if (!out.shows[id]) { out.shows[id] = sh; continue; }
+    out.shows[id].watched = { ...(sh.watched || {}), ...(out.shows[id].watched || {}) };
+    if (!out.shows[id].service && sh.service) out.shows[id].service = sh.service;
+  }
+  for (const [id, m] of Object.entries(local.movies)) {
+    if (!out.movies[id]) out.movies[id] = m;
+    else out.movies[id].watched = out.movies[id].watched || m.watched;
+  }
+  for (const [k, v] of Object.entries(local.settings)) if (v && !out.settings[k]) out.settings[k] = v;
+  return out;
+}
+function onLocalChange() {
+  if (applyingRemote || !db.linkedUid) return;
+  if (userSig() === db.syncedSig) return;
+  if (!db.dirty) { db.dirty = true; writeLocal(); }
+  if (!account.user || !backend) return;   // not connected yet: pushed when sign-in finishes
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(pushNow, 1200);
+  updateSyncLine();
+}
+async function pushNow() {
+  pushTimer = null;
+  if (!account.user) return;
+  const data = cloudData();
+  account.syncing = true; updateSyncLine();
+  try {
+    await backend.save(account.user.uid, data);
+    markSynced();
+    account.lastSync = Date.now(); account.error = "";
+  } catch (e) {
+    account.error = "Couldn't save to your account. Will retry.";
+    clearTimeout(pushTimer); pushTimer = setTimeout(pushNow, 20000);
+  }
+  account.syncing = false; updateSyncLine();
+}
+function onRemote(data) {
+  if (!data || pushTimer || db.dirty) return;   // our own unsaved changes win; they're about to be pushed
+  const before = userSig();
+  applyCloud(data);
+  account.lastSync = Date.now(); updateSyncLine();
+  if (userSig() !== before) { refreshQuiet(); backgroundRefresh(); }
+}
+async function linkAccount(user) {
+  account.user = user; account.error = "";
+  try {
+    const cloud = await backend.load(user.uid);
+    if (db.linkedUid === user.uid) {
+      if (db.dirty || !cloud) await pushNow(); else applyCloud(cloud);
+    } else {
+      if (cloud) applyCloud(mergeLocalInto(cloud));
+      db.linkedUid = user.uid; writeLocal();
+      await pushNow();
+    }
+    account.lastSync = Date.now();
+  } catch (e) {
+    account.error = "Couldn't reach your account. Your changes are kept on this device.";
+  }
+  refreshQuiet(); backgroundRefresh();
+  if (unwatch) unwatch();
+  unwatch = backend.watch(user.uid, onRemote, () => { account.error = "Lost connection to your account."; updateSyncLine(); });
+}
+function syncStatusText() {
+  if (account.error) return account.error;
+  if (account.syncing || pushTimer) return "Saving…";
+  if (!account.lastSync) return "Connecting…";
+  const mins = Math.round((Date.now() - account.lastSync) / 60000);
+  return "All changes saved" + (mins >= 1 ? ` · synced ${mins} min ago` : "");
+}
+function updateSyncLine() { const el = $("#syncLine"); if (el) el.textContent = syncStatusText(); }
+function refreshQuiet() {
+  const h = location.hash.replace(/^#\/?/, "");
+  const m = h.match(/^show\/(\d+)$/);
+  if (m) {
+    if (!db.shows[m[1]]) return go("/");
+    const y = window.scrollY; renderShow(m[1]); window.scrollTo(0, y); return;
+  }
+  if (h === "add") return;
+  refresh();
+}
+const AUTH_ERRORS = {
+  "auth/email-already-in-use": "There's already an account with that email. Try signing in.",
+  "auth/invalid-email": "That doesn't look like an email address.",
+  "auth/weak-password": "Pick a password with at least 6 characters.",
+  "auth/invalid-credential": "Email or password is wrong.",
+  "auth/wrong-password": "Email or password is wrong.",
+  "auth/user-not-found": "No account with that email. Create one instead?",
+  "auth/missing-password": "Enter your password.",
+  "auth/too-many-requests": "Too many tries. Wait a few minutes and try again.",
+  "auth/network-request-failed": "Couldn't connect. Check your internet and try again.",
+  "auth/unauthorized-domain": "Sign-in isn't allowed from this web address yet (add it under Authorized domains in Firebase)."
+};
+const authMsg = e => AUTH_ERRORS[e && e.code] || "Something went wrong. Please try again.";
+function openAccountSheet(mode) {
+  const reg = mode === "register";
+  sheet(`
+    <h3>${reg ? "Create your account" : "Sign in"}</h3>
+    <p>${reg ? "Your shows, movies, and watched episodes will be saved to it." : "Welcome back."}</p>
+    <form id="acctForm" class="acct">
+      <div class="field"><label for="acEmail">Email</label><input id="acEmail" type="email" autocomplete="email" required></div>
+      <div class="field"><label for="acPass">Password</label><input id="acPass" type="password" autocomplete="${reg ? "new-password" : "current-password"}" minlength="6" required></div>
+      ${reg ? `<p class="sub">At least 6 characters.</p>` : ""}
+      <div id="acErr" class="err" hidden></div>
+      <button class="btn" type="submit">${reg ? "Create account" : "Sign in"}</button>
+    </form>
+    <button class="linkish" data-a="switch">${reg ? "Already have an account? Sign in" : "New here? Create an account"}</button>
+    ${reg ? "" : `<button class="linkish" data-a="forgot">Forgot password?</button>`}
+  `, (m, close) => {
+    const err = m.querySelector("#acErr");
+    const showErr = t => { err.hidden = false; err.textContent = t; };
+    setTimeout(() => m.querySelector("#acEmail").focus(), 50);
+    m.querySelector("#acctForm").onsubmit = async ev => {
+      ev.preventDefault();
+      const email = m.querySelector("#acEmail").value.trim(), pass = m.querySelector("#acPass").value;
+      const btn = m.querySelector('#acctForm button[type="submit"]');
+      btn.disabled = true; btn.textContent = reg ? "Creating…" : "Signing in…"; err.hidden = true;
+      try {
+        if (!backend) throw { code: "auth/network-request-failed" };
+        await (reg ? backend.signUp(email, pass) : backend.signIn(email, pass));
+        close();
+        toast(reg ? "Account created. Your list is being saved." : "Signed in.");
+      } catch (e) {
+        showErr(authMsg(e));
+        btn.disabled = false; btn.textContent = reg ? "Create account" : "Sign in";
+      }
+    };
+    m.querySelector('[data-a="switch"]').onclick = () => { close(); openAccountSheet(reg ? "signin" : "register"); };
+    const forgot = m.querySelector('[data-a="forgot"]');
+    if (forgot) forgot.onclick = async () => {
+      const email = m.querySelector("#acEmail").value.trim();
+      if (!email) return showErr("Type your email above first, then tap Forgot password.");
+      try { await backend.reset(email); err.hidden = false; err.textContent = "Check your email for a link to reset your password."; err.classList.add("okmsg"); }
+      catch (e) { showErr(authMsg(e)); }
+    };
+  });
+}
+function confirmSignOut() {
+  sheet(`
+    <h3>Sign out?</h3>
+    <p>Your list stays saved in your account. It will be removed from this device until you sign in again.</p>
+    <button class="btn danger" data-a="out">Sign out</button>
+  `, (m, close) => {
+    m.querySelector('[data-a="out"]').onclick = async () => {
+      close();
+      if (pushTimer) { clearTimeout(pushTimer); await pushNow(); }
+      try { await backend.signOut(); } catch {}
+    };
+  });
+}
+function clearLocalAfterSignOut() {
+  if (unwatch) { unwatch(); unwatch = null; }
+  const keep = { view: settings().view, region: settings().region, hideAcctBanner: true };
+  db = { shows: {}, movies: {}, settings: keep, deviceId: db.deviceId };
+  writeLocal();
+}
+async function startAccounts() {
+  if (!account.enabled) return;
+  try { backend = await loadBackend(); } catch { backend = null; }
+  if (!backend) { account.ready = true; return; }
+  backend.onAuth(user => {
+    const wasSignedIn = !!account.user;
+    account.ready = true;
+    if (user) { if (!account.user || account.user.uid !== user.uid) linkAccount(user); }
+    else {
+      account.user = null;
+      if (wasSignedIn || db.linkedUid) { delete db.linkedUid; clearLocalAfterSignOut(); toast("Signed out."); }
+      refreshQuiet();
+    }
+  });
+}
+
 render();
+startAccounts();
 })();
 </script>
 </body>
