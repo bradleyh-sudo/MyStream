@@ -261,6 +261,25 @@ a{color:var(--accent)}
 .lists-btn.sm{width:30px;height:30px}
 .lists-btn.sm svg{width:17px;height:17px}
 .lists-btn .lb{position:absolute;right:1px;top:1px;min-width:15px;height:15px;border-radius:999px;background:var(--accent);color:var(--accent-ink);font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 3px}
+.bulkbar{position:fixed;left:0;right:0;bottom:0;z-index:12;display:flex;gap:8px;justify-content:center;background:var(--surface);border-top:1px solid var(--line);
+  padding:8px 16px calc(env(safe-area-inset-bottom) + 8px);box-shadow:0 -4px 16px rgba(0,0,0,.08)}
+.bulkbar[hidden]{display:none}
+body.has-tabs .bulkbar{bottom:calc(env(safe-area-inset-bottom) + 62px);padding-bottom:8px}
+body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
+.bb{flex:1;max-width:180px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;border-radius:12px;font-size:13px;font-weight:650;color:var(--text);background:var(--surface2)}
+.bb svg{width:22px;height:22px}
+.bb.danger{color:var(--danger)}
+.bb.wide{max-width:none;flex-direction:row;justify-content:center;gap:8px;height:48px;font-size:16px;background:var(--accent);color:var(--accent-ink)}
+.bb:disabled{opacity:.45}
+.selbtn{height:32px}
+.selecting [data-show],.selecting [data-movie],.selecting .result{position:relative}
+.selbox{flex:none;width:26px;height:26px;border-radius:999px;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;color:transparent;background:var(--surface)}
+.selbox svg{width:14px;height:14px}
+.picked .selbox{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.picked{outline:2px solid var(--accent);outline-offset:-2px}
+.selecting .star,.selecting .heart,.selecting .lists-btn,.selecting .check{pointer-events:none;opacity:.35}
+.results-head{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin:-4px 0 10px;font-size:14px;color:var(--muted);font-weight:600}
+.results-head span{margin-right:auto}
 .count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;align-self:flex-start;padding-top:2px}
 .empty{text-align:center;color:var(--muted);padding:56px 16px}
 .empty h2{color:var(--text);font-size:20px;margin-bottom:6px}
@@ -322,6 +341,7 @@ a{color:var(--accent)}
   <button data-tab="favorites"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.2-9.4C1.6 7.6 3.9 4.5 7.2 4.5c2 0 3.6 1.1 4.8 2.9 1.2-1.8 2.8-2.9 4.8-2.9 3.3 0 5.6 3.1 4.4 6.6-1.7 4.8-9.2 9.4-9.2 9.4z"/></svg>Favorites</button>
   <button data-tab="explore"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>Explore</button>
 </nav>
+<div id="bulkBar" class="bulkbar" hidden></div>
 <div id="overlay"></div>
 <input type="file" id="importFile" accept="application/json,.json" hidden>
 <script>
@@ -377,7 +397,18 @@ function saveDb() {
 /* ---------- TVMaze API (free, no key) ---------- */
 const API = "https://api.tvmaze.com";
 class NetError extends Error {}
+const sleep = ms => new Promise(res => setTimeout(res, ms));
+const apiTimes = [];
+async function apiSlot() {   // at most 16 requests in any 10 seconds
+  for (;;) {
+    const now = Date.now();
+    while (apiTimes.length && now - apiTimes[0] > 10000) apiTimes.shift();
+    if (apiTimes.length < 16) { apiTimes.push(now); return; }
+    await sleep(10000 - (now - apiTimes[0]) + 50);
+  }
+}
 async function api(path, tries = 0) {
+  await apiSlot();
   let r;
   try {
     const ctl = new AbortController();
@@ -387,7 +418,7 @@ async function api(path, tries = 0) {
   } catch (e) {
     throw new NetError(e && e.name === "AbortError" ? "timeout" : "blocked");
   }
-  if (r.status === 429 && tries < 3) { await new Promise(res => setTimeout(res, 1500)); return api(path, tries + 1); }
+  if (r.status === 429 && tries < 6) { await sleep(2000 * (tries + 1)); return api(path, tries + 1); }
   if (!r.ok) throw new Error("TVMaze returned " + r.status);
   return r.json();
 }
@@ -503,14 +534,15 @@ function listsBtn(kind, id, label, extra = "") {
   const n = listKeys().filter(k => isListed((db.lists[k][kind === "show" ? "shows" : "movies"] || {})[id])).length;
   return `<button class="lists-btn ${extra}" data-lists aria-label="Lists for ${esc(label)}">${ICON.people}${n > 1 ? `<span class="lb">${n}</span>` : ""}</button>`;
 }
-// Put a show/movie from the current list onto another list too (copies its progress).
+// Put a show/movie from the current list onto another list too (starts with nothing checked there).
 function copyToList(kind, id, key) {
   const src = storeOf(kind)[id]; if (!src) return;
   const copy = JSON.parse(JSON.stringify(src));
   withList(key, () => {
     const store = storeOf(kind), cur = store[id];
     if (cur) cur.listed = true;
-    else store[id] = { ...copy, listed: true, fav: false, favCats: [] };
+    else store[id] = { ...copy, listed: true, fav: false, favCats: [], watched: kind === "show" ? {} : undefined,
+                       lastWatchedAt: undefined, addedAt: Date.now(), ...(kind === "movie" ? { watched: false } : {}) };
     saveDb();
   });
 }
@@ -614,7 +646,12 @@ function go(hash) { location.hash = hash; }
 let currentRoute = null, prevRoute = null;
 function render() {
   const h = location.hash.replace(/^#\/?/, "");
-  if (h !== currentRoute) { prevRoute = currentRoute; currentRoute = h; }
+  if (h !== currentRoute) {
+    prevRoute = currentRoute; currentRoute = h;
+    if (h !== "" && h !== "/") { sel.on = false; sel.items.clear(); }
+    if (h !== "add") { pick.on = false; pick.ids.clear(); }
+  }
+  $("#bulkBar").hidden = true; document.body.classList.remove("has-bulk");
   window.scrollTo(0, 0);
   const showMatch = h.match(/^show\/(\d+)$/);
   const tab = h === "explore" || h === "favorites" ? h : h === "add" || showMatch || h.startsWith("join/") ? null : "home";
@@ -664,11 +701,15 @@ function renderHome() {
     </div>`;
 
   app.innerHTML = `
-    <header class="bar">
+    ${sel.on ? `<header class="bar">
+      <h1>${sel.items.size} selected</h1>
+      <button class="btn ghost small" id="selAll">${sel.items.size ? "Clear" : "Select all"}</button>
+      <button class="btn small" id="selDone">Done</button>
+    </header>` : `<header class="bar">
       <h1>Watching</h1>
       <button class="icon-btn" id="menuBtn" aria-label="Menu">${ICON.more}</button>
       <button class="btn" id="addBtn">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add show</button>
-    </header>
+    </header>`}
     ${listSwitcherHtml()}
     ${account.enabled && account.ready && !account.user && !settings().hideAcctBanner ? `<div class="banner">
         <span>Save your list to a free account so it's safe and on all your devices.</span>
@@ -676,6 +717,7 @@ function renderHome() {
     ${shows.length || movies.length ? `
       <div class="toolbar">
         ${services.length > 1 ? `<div class="chips">${["All", ...services].map(s => `<button class="chip ${s === filter ? "on" : ""}" data-f="${esc(s)}">${esc(s)}</button>`).join("")}</div>` : `<div class="chips"></div>`}
+        ${sel.on ? "" : `<button class="btn ghost small selbtn" id="selStart">Select</button>`}
         ${viewToggle}
       </div>
       ${section("In progress", "", watching)}
@@ -690,23 +732,43 @@ function renderHome() {
         <p style="margin-top:14px">or <a href="#/explore">explore what's popular</a></p>
       </div>`}
   `;
-  $("#addBtn").onclick = () => go("/add");
+  $("#addBtn") && ($("#addBtn").onclick = () => go("/add"));
   bindListSwitcher();
   $("#addBtn2") && ($("#addBtn2").onclick = () => go("/add"));
-  $("#menuBtn").onclick = openMainMenu;
+  $("#menuBtn") && ($("#menuBtn").onclick = openMainMenu);
+  $("#selStart") && ($("#selStart").onclick = () => { sel.on = true; sel.items.clear(); renderHome(); });
+  $("#selDone") && ($("#selDone").onclick = () => { sel.on = false; sel.items.clear(); renderHome(); });
+  $("#selAll") && ($("#selAll").onclick = () => {
+    if (sel.items.size) sel.items.clear();
+    else app.querySelectorAll("[data-show],[data-movie]").forEach(el => sel.items.add(el.dataset.show ? "show:" + el.dataset.show : "movie:" + el.dataset.movie));
+    renderHome();
+  });
+  if (sel.on) {
+    app.classList.add("selecting");
+    app.querySelectorAll("[data-show],[data-movie]").forEach(el => {
+      const key = el.dataset.show ? "show:" + el.dataset.show : "movie:" + el.dataset.movie;
+      el.classList.toggle("picked", sel.items.has(key));
+      el.insertAdjacentHTML("afterbegin", `<span class="selbox" aria-hidden="true">${ICON.check}</span>`);
+      el.setAttribute("aria-pressed", sel.items.has(key));
+    });
+    drawBulkBar();
+  } else app.classList.remove("selecting");
   if ($("#bannerGo")) {
     $("#bannerGo").onclick = () => openAccountSheet("register");
     $("#bannerX").onclick = () => { settings().hideAcctBanner = true; saveDb(); renderHome(); };
   }
   app.querySelectorAll(".chip").forEach(c => c.onclick = () => { filter = c.dataset.f; renderHome(); });
   app.querySelectorAll("[data-view]").forEach(b => b.onclick = () => { settings().view = b.dataset.view; saveDb(); renderHome(); });
+  const toggleSel = key => { sel.items.has(key) ? sel.items.delete(key) : sel.items.add(key); renderHome(); };
   app.querySelectorAll("[data-show]").forEach(c => c.onclick = e => {
+    if (sel.on) return toggleSel("show:" + c.dataset.show);
     if (e.target.closest("[data-lists]")) return openLineLists("show", c.dataset.show);
     if (e.target.closest("[data-star]")) return removeItem("show", c.dataset.show);
     go("/show/" + c.dataset.show);
   });
   app.querySelectorAll("[data-movie]").forEach(c => c.onclick = e => {
     const id = c.dataset.movie;
+    if (sel.on) return toggleSel("movie:" + id);
     if (e.target.closest("[data-lists]")) return openLineLists("movie", id);
     if (e.target.closest("[data-star]")) return removeItem("movie", id);
     if (e.target.closest(".check")) { db.movies[id].watched = !db.movies[id].watched; saveDb(); renderHome(); return; }
@@ -784,7 +846,7 @@ async function backgroundRefresh() {
   do {
     refreshAgain = false;
     for (const id of Object.keys(db.shows)) {
-      try { if (await refreshShow(id)) changed = true; } catch {}
+      try { if (await refreshShow(id)) { changed = true; await sleep(900); } } catch {}
     }
   } while (refreshAgain);
   refreshing = false;
@@ -893,14 +955,18 @@ async function search(text) {
 function drawResults(list) {
   const out = $("#results");
   if (!list.length) { out.innerHTML = `<p class="empty">No shows found by that name.</p>`; return; }
-  out.innerHTML = `<div class="list">${list.map(s => {
+  out.innerHTML = `<div class="results-head">${pick.on
+      ? `<span>${pick.ids.size} picked</span><button class="btn ghost small" id="pickCancel">Cancel</button>`
+      : `<button class="btn ghost small" id="pickStart">Select several</button>`}</div>
+    <div class="list ${pick.on ? "selecting" : ""}">${list.map(s => {
     const have = isListed(db.shows[s.id]);
     const yr = (s.premiered || "").slice(0, 4);
     const ended = s.ended ? s.ended.slice(0, 4) : "";
     const span = yr ? (s.status === "Ended" && ended && ended !== yr ? `${yr}–${ended}` : s.status === "Running" ? `${yr}–` : yr) : "";
     const svc = serviceOf(s);
     const fav = !!(db.shows[s.id] && db.shows[s.id].fav);
-    return `<div class="card result" data-id="${s.id}" role="button" tabindex="0" aria-label="${esc(s.name)}">
+    return `<div class="card result ${pick.ids.has(s.id) ? "picked" : ""}" data-id="${s.id}" role="button" tabindex="0" aria-label="${esc(s.name)}">
+      ${pick.on ? `<span class="selbox" aria-hidden="true">${ICON.check}</span>` : ""}
       ${posterHtml(s.image && (s.image.medium || s.image.original), s.name)}
       <div class="meta">
         <div class="name">${esc(s.name)}</div>
@@ -913,8 +979,12 @@ function drawResults(list) {
       </div>
     </div>`;
   }).join("")}</div>`;
+  const ps = $("#pickStart"); if (ps) ps.onclick = () => { pick.on = true; pick.ids.clear(); drawResults(list); };
+  const pc = $("#pickCancel"); if (pc) pc.onclick = () => { pick.on = false; pick.ids.clear(); $("#bulkBar").hidden = true; document.body.classList.remove("has-bulk"); drawResults(list); };
+  if (pick.on) drawPickBar();
   out.querySelectorAll(".result").forEach(c => c.onclick = e => {
     const id = c.dataset.id;
+    if (pick.on) { const n = Number(id); pick.ids.has(n) ? pick.ids.delete(n) : pick.ids.add(n); return drawResults(list); }
     if (e.target.closest("[data-star]")) return toggleShowInList(id);
     if (e.target.closest("[data-heart]")) return toggleShowFav(id);
     go("/show/" + id);
@@ -927,12 +997,23 @@ async function addTvMaze(id, opts = {}, listKey) {
   id = Number(id);
   const cur = withList(listKey, () => db.shows[id]);
   if (cur) { if (opts.fav) cur.fav = true; if (opts.listed) cur.listed = true; saveDb(); return cur; }
-  const data = previewCache[id] || await fetchShow(id);
+  const data = previewCache[id] || cachedShowData(id) || await fetchShow(id);
   return withList(listKey, () => {
     db.shows[id] = { id, service: data.defaultService, watched: {}, addedAt: Date.now(), ...JSON.parse(JSON.stringify(data)), fav: !!opts.fav, listed: !!opts.listed };
     saveDb();
     return db.shows[id];
   });
+}
+function cachedShowData(id) {
+  for (const L of Object.values(db.lists)) {
+    const sh = (L.shows || {})[id];
+    if (sh && sh.episodes && sh.episodes.length && sh.fetchedAt) {
+      const out = { name: sh.name, image: sh.image, status: sh.status, year: sh.year };
+      for (const f of CACHE_FIELDS) if (sh[f] !== undefined) out[f] = sh[f];
+      return JSON.parse(JSON.stringify(out));
+    }
+  }
+  return null;
 }
 const showNameFor = id => ((lastResults || []).find(s => s.id == id) || db.shows[id] || previewCache[id] || {}).name || "This show";
 // Star/heart when you have more than one list: ask which list(s).
@@ -997,7 +1078,7 @@ function listSwitcherHtml() {
 function bindListSwitcher() { const b = $("#listSw"); if (b) b.onclick = openListsSheet; }
 function switchList(k) {
   if (!db.lists[k]) return;
-  db.active = k; filter = "All"; favFilter = "All"; writeLocal();
+  db.active = k; filter = "All"; favFilter = "All"; sel.on = false; sel.items.clear(); writeLocal();
   refresh(); backgroundRefresh();
 }
 function openListsSheet() {
@@ -1127,6 +1208,87 @@ function renderJoin(id, name) {
       el.textContent = e && (e.code === "not-found" || e.code === "permission-denied") ? "This invite link doesn't work. The list may have been deleted. Ask for a new link." : "Couldn't join right now. Check your connection.";
     }
   });
+}
+
+/* ---------- bulk actions ---------- */
+const sel = { on: false, items: new Set() };    // Watching page: "show:12" / "movie:34"
+const pick = { on: false, ids: new Set() };     // search results: TVMaze ids
+function selectedItems() {
+  return [...sel.items].map(k => { const [kind, id] = k.split(":"); return { kind, id, it: storeOf(kind)[id] }; }).filter(x => x.it);
+}
+function showBar(html) {
+  const bar = $("#bulkBar"); bar.innerHTML = html; bar.hidden = false; document.body.classList.add("has-bulk");
+  return bar;
+}
+function drawBulkBar() {
+  const n = sel.items.size, others = listKeys().filter(k => k !== db.active);
+  const bar = showBar(`
+    <button class="bb" data-b="watched" ${n ? "" : "disabled"}>${ICON.check}<span>Mark watched</span></button>
+    ${others.length ? `<button class="bb" data-b="list" ${n ? "" : "disabled"}>${ICON.people}<span>Add to list</span></button>` : ""}
+    <button class="bb danger" data-b="remove" ${n ? "" : "disabled"}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg><span>Remove</span></button>`);
+  bar.querySelector('[data-b="watched"]').onclick = bulkWatched;
+  bar.querySelector('[data-b="remove"]').onclick = bulkRemove;
+  const lb = bar.querySelector('[data-b="list"]'); if (lb) lb.onclick = bulkToList;
+}
+function endSelect() { sel.on = false; sel.items.clear(); refresh(); }
+function bulkWatched() {
+  const items = selectedItems(); if (!items.length) return;
+  const before = items.map(x => ({ x, watched: JSON.parse(JSON.stringify(x.it.watched ?? null)), last: x.it.lastWatchedAt }));
+  for (const { kind, it } of items) {
+    if (kind === "show") { regularEps(it).filter(aired).forEach(e => it.watched[e.id] = it.watched[e.id] || Date.now()); it.lastWatchedAt = Date.now(); }
+    else it.watched = true;
+  }
+  saveDb(); endSelect();
+  toast(`Marked ${items.length} as watched.`, "Undo", () => { for (const b of before) { b.x.it.watched = b.watched ?? (b.x.kind === "show" ? {} : false); b.x.it.lastWatchedAt = b.last; } saveDb(); refresh(); });
+}
+function bulkRemove() {
+  const items = selectedItems(); if (!items.length) return;
+  if (!confirm(`Remove ${items.length} from Watching?`)) return;
+  const undo = [];
+  for (const { kind, id, it } of items) {
+    const store = storeOf(kind);
+    if (it.fav) { undo.push(() => { it.listed = true; }); it.listed = false; }
+    else { undo.push(() => { store[id] = it; }); delete store[id]; }
+  }
+  saveDb(); endSelect();
+  toast(`Removed ${items.length} from Watching.`, "Undo", () => { undo.forEach(f => f()); saveDb(); refresh(); });
+}
+function bulkToList() {
+  const items = selectedItems(); if (!items.length) return;
+  const others = listKeys().filter(k => k !== db.active);
+  sheet(`<h3>Add ${items.length} to…</h3><p>They'll start with nothing checked on that list.</p>
+    <div class="catlist">${others.map(k => `<button class="lcrow" data-k="${esc(k)}">${k === "me" ? ICON.person : ICON.people}<span class="ln">${esc(listName(k))}</span><span class="lcst">Add</span></button>`).join("")}</div>`,
+    (m, close) => m.querySelectorAll("[data-k]").forEach(b => b.onclick = () => {
+      const k = b.dataset.k;
+      for (const { kind, id } of items) copyToList(kind, id, k);
+      close(); endSelect(); toast(`Added ${items.length} to ${listName(k)}.`);
+    }));
+}
+// Search results: pick several, then add them all.
+function drawPickBar() {
+  if (!pick.on) return;
+  const n = pick.ids.size;
+  const bar = showBar(`<button class="bb wide" data-b="add" ${n ? "" : "disabled"}>${ICON.plus}<span>${n ? `Add ${n} show${n === 1 ? "" : "s"}${multiList() ? "…" : " to Watching"}` : "Tick the shows to add"}</span></button>`);
+  bar.querySelector('[data-b="add"]').onclick = () => {
+    const ids = [...pick.ids];
+    if (!multiList()) return bulkAddShows(ids, db.active);
+    sheet(`<h3>Add ${ids.length} show${ids.length === 1 ? "" : "s"} to…</h3>
+      <div class="catlist">${listKeys().map(k => `<button class="lcrow" data-k="${esc(k)}">${k === "me" ? ICON.person : ICON.people}<span class="ln">${esc(listName(k))}</span><span class="lcst">Add</span></button>`).join("")}</div>`,
+      (m, close) => m.querySelectorAll("[data-k]").forEach(b => b.onclick = () => { close(); bulkAddShows(ids, b.dataset.k); }));
+  };
+}
+async function bulkAddShows(ids, key) {
+  const bar = $("#bulkBar"), label = bar.querySelector("span"), btn = bar.querySelector("button");
+  btn.disabled = true;
+  let ok = 0, failed = 0;
+  for (let i = 0; i < ids.length; i++) {
+    label.textContent = `Adding ${i + 1} of ${ids.length}…`;
+    try { await addTvMaze(ids[i], { listed: true }, key); ok++; } catch { failed++; }
+  }
+  pick.on = false; pick.ids.clear();
+  $("#bulkBar").hidden = true; document.body.classList.remove("has-bulk");
+  refresh();
+  toast(`Added ${ok} show${ok === 1 ? "" : "s"} to ${key === "me" && !multiList() ? "Watching" : listName(key)}.` + (failed ? ` ${failed} couldn't be added; try those again.` : ""));
 }
 
 /* ---------- Favorites tab & categories ---------- */
