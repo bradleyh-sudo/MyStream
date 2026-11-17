@@ -1,0 +1,1143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>My Shows</title>
+<meta name="description" content="Track the TV shows I'm watching, where they stream, and which episodes I've seen.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="My Shows">
+<meta name="theme-color" content="#14161c">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%2314161c'/%3E%3Crect x='30' y='48' width='120' height='80' rx='12' fill='none' stroke='%23f5b942' stroke-width='10'/%3E%3Cpath d='M70 150h40M90 128v22' stroke='%23f5b942' stroke-width='10' stroke-linecap='round'/%3E%3Cpath d='M78 72l28 16-28 16z' fill='%23f5b942'/%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#f4f3f0; --surface:#ffffff; --surface2:#ecebe7; --text:#17181c; --muted:#6b6d75;
+  --line:#dddcd7; --accent:#c98a12; --accent-ink:#ffffff; --good:#2f8a4f; --danger:#c0392b;
+  --shadow:0 1px 2px rgba(0,0,0,.06),0 2px 8px rgba(0,0,0,.05);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#14161c; --surface:#1d2028; --surface2:#262a34; --text:#eceef2; --muted:#9a9eaa;
+    --line:#2e323d; --accent:#f5b942; --accent-ink:#1a1406; --good:#5cc27f; --danger:#ff6b5b;
+    --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#14161c; --surface:#1d2028; --surface2:#262a34; --text:#eceef2; --muted:#9a9eaa;
+  --line:#2e323d; --accent:#f5b942; --accent-ink:#1a1406; --good:#5cc27f; --danger:#ff6b5b;
+  --shadow:none;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--text)}
+body{font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent;
+  padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 24px);min-height:100vh}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input,select{font:inherit;color:inherit}
+.wrap{max-width:720px;margin:0 auto;padding:0 16px}
+header.bar{position:sticky;top:0;z-index:5;background:var(--bg);padding:14px 0 10px;display:flex;align-items:center;gap:10px}
+header.bar h1{font-size:26px;font-weight:750;letter-spacing:-.02em;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:40px;padding:0 16px;border-radius:999px;
+  background:var(--accent);color:var(--accent-ink);font-weight:650;white-space:nowrap}
+.btn.ghost{background:var(--surface2);color:var(--text)}
+.btn.small{height:32px;padding:0 12px;font-size:14px}
+.btn.danger{background:transparent;color:var(--danger);border:1px solid var(--line)}
+.icon-btn{width:40px;height:40px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;background:var(--surface2);flex:none}
+.icon-btn svg{width:20px;height:20px}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 12px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;height:32px;padding:0 14px;border-radius:999px;background:var(--surface2);font-size:14px;font-weight:550;color:var(--muted)}
+.chip.on{background:var(--text);color:var(--bg)}
+.list{display:flex;flex-direction:column;gap:10px}
+.card{display:flex;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px;box-shadow:var(--shadow);text-align:left;width:100%}
+.poster{width:56px;height:80px;border-radius:8px;object-fit:cover;background:var(--surface2);flex:none;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:22px;font-weight:700;overflow:hidden}
+.card .meta{flex:1;min-width:0}
+.card .name{font-weight:650;font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.svc{display:inline-block;font-size:12px;font-weight:650;padding:2px 8px;border-radius:6px;background:var(--surface2);color:var(--text);margin-top:3px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+.svc.none{color:var(--muted);font-weight:500}
+.next{font-size:14px;color:var(--muted);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.next b{color:var(--text);font-weight:600}
+.progress{height:4px;border-radius:4px;background:var(--surface2);margin-top:8px;overflow:hidden}
+.progress>i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.pills{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.pill{font-size:13px;font-weight:650;padding:2px 9px;border-radius:999px;background:var(--surface2);color:var(--muted);font-variant-numeric:tabular-nums}
+.pill.seen{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.pill.left{background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--text)}
+.air{font-size:14px;margin-top:3px}
+.air b{font-weight:600}
+.air.muted{color:var(--muted)}
+.section-label .n{font-weight:500;opacity:.8}
+.hint{font-size:14px;color:var(--muted);margin:-4px 0 8px}
+.svc{display:inline-flex;align-items:center;gap:6px}
+.svc-ico{display:inline-flex;align-items:center;justify-content:center;border-radius:22%;font-weight:800;letter-spacing:-.03em;flex:none;line-height:1}
+.svc-row{display:flex;gap:8px;align-items:center}
+.svc-row input{flex:1;min-width:0}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:0 0 16px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;box-shadow:var(--shadow)}
+.stat .big{font-size:24px;font-weight:750;font-variant-numeric:tabular-nums;line-height:1.1}
+.stat .lbl{font-size:13px;font-weight:600}
+.stat .sm{font-size:12px;color:var(--muted)}
+.bottom-actions{display:flex;flex-direction:column;gap:10px;margin-top:20px}
+.bottom-actions .btn{height:48px}
+body.has-tabs{padding-bottom:calc(env(safe-area-inset-bottom) + 84px)}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:10;display:flex;justify-content:center;gap:4px;background:var(--surface);border-top:1px solid var(--line);
+  padding:6px 16px calc(env(safe-area-inset-bottom) + 6px)}
+.tabs[hidden]{display:none}
+.tabs button{flex:1;max-width:200px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:12px;font-weight:600;color:var(--muted);padding:6px 0;border-radius:10px}
+.tabs button svg{width:24px;height:24px}
+.tabs button.on{color:var(--accent)}
+.seg{display:flex;background:var(--surface2);border-radius:12px;padding:3px;margin-bottom:12px}
+.seg button{flex:1;height:36px;border-radius:9px;font-weight:600;color:var(--muted)}
+.seg button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
+.chip.prov{display:inline-flex;align-items:center;gap:6px}
+.chip.prov img{width:20px;height:20px;border-radius:5px}
+.chips.sorts{padding-top:0}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 10px}
+@media (min-width:560px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.tile{text-align:left;min-width:0}
+.tile .art{position:relative;aspect-ratio:2/3;border-radius:10px;overflow:hidden;background:var(--surface2);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:28px;font-weight:700}
+.tile .art img{width:100%;height:100%;object-fit:cover;display:block}
+.tile .rank{position:absolute;left:6px;top:6px;min-width:24px;height:24px;padding:0 6px;border-radius:999px;background:rgba(0,0,0,.72);color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.tile .have-old{position:absolute;right:6px;top:6px;width:24px;height:24px;border-radius:999px;background:var(--good);color:#fff;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center}
+.tile .tt{font-size:14px;font-weight:600;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tile .ty{font-size:12px;color:var(--muted)}
+.btn.more{display:flex;margin:18px auto 0}
+.credit{font-size:11px;color:var(--muted);text-align:center;margin:28px 0 8px}
+.setup{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;box-shadow:var(--shadow)}
+.setup h2{font-size:19px;margin-bottom:6px}
+.setup ol{margin:10px 0 14px 20px;display:flex;flex-direction:column;gap:6px}
+.setup p{margin-bottom:8px}
+a{color:var(--accent)}
+.sheet{max-height:88vh;overflow-y:auto}
+.content{display:flex;flex-direction:column;gap:12px}
+.detail{display:flex;gap:14px}
+.detail .poster{width:92px;height:138px;border-radius:10px}
+.detail h3{font-size:20px;line-height:1.2;margin-bottom:4px}
+.where{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.pv{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;background:var(--surface2);padding:3px 9px 3px 3px;border-radius:999px}
+.pv img{width:22px;height:22px;border-radius:6px}
+.overview{font-size:15px;line-height:1.5;color:var(--text)!important}
+.card.movie{cursor:pointer}
+.card.movie .check{margin-right:4px}
+.card.movie.seen .check{background:var(--good);border-color:var(--good);color:#fff}
+.card.movie.seen .check svg{opacity:1}
+.card.movie.seen .name{color:var(--muted)}
+.toolbar{display:flex;align-items:flex-start;gap:10px}
+.toolbar .chips{flex:1;min-width:0}
+.seg.mini{flex:none;margin:0;padding:2px;border-radius:10px}
+.seg.mini button{width:38px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center}
+.seg.mini svg{width:18px;height:18px}
+.rows{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)}
+.row{display:flex;align-items:center;gap:10px;width:100%;min-height:42px;padding:6px 12px;border-bottom:1px solid var(--line);text-align:left;font-size:15px;cursor:pointer}
+.row:last-child{border-bottom:0}
+.row .rn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:550}
+.row .code{color:var(--muted);font-weight:500;font-size:13px;margin-left:8px;font-variant-numeric:tabular-nums}
+.row .rs{flex:none;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;min-width:44px;text-align:right}
+.row .rs b{color:var(--text);font-weight:650}
+.row .rs .ok{color:var(--good);font-weight:700}
+.row .rw{flex:none;font-size:13px;color:var(--muted);width:62px;text-align:right;font-variant-numeric:tabular-nums}
+.row .rw.soon{color:var(--accent);font-weight:600}
+.row.seen .rn{color:var(--muted);text-decoration:line-through}
+.check.sm{width:26px;height:26px}
+.check.sm svg{width:13px;height:13px}
+.row.seen .check{background:var(--good);border-color:var(--good);color:#fff}
+.row.seen .check svg{opacity:1}
+.section-label.with-cols{display:flex;align-items:baseline;gap:6px}
+.section-label .cols{margin-left:auto;display:flex;font-size:11px;padding-right:13px}
+.section-label .cols span:first-child{min-width:44px;text-align:right}
+.section-label .cols span:last-child{width:72px;text-align:right}
+.star{flex:none;width:36px;height:36px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted)}
+.star svg{width:22px;height:22px;fill:none;stroke:currentColor}
+.star.on{color:var(--accent)}
+.star.on svg{fill:currentColor}
+.star.sm{width:30px;height:30px;margin-right:-6px}
+.star.sm svg{width:18px;height:18px}
+.card .star{align-self:flex-start}
+.card{cursor:pointer}
+.tile{cursor:pointer}
+.tile .star{position:absolute;right:5px;top:5px;width:34px;height:34px;background:rgba(0,0,0,.55);color:#fff}
+.tile .star.on{color:#f5b942}
+.tile .star.busy svg{animation:spin 1s linear infinite;opacity:.7}
+.count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;align-self:flex-start;padding-top:2px}
+.empty{text-align:center;color:var(--muted);padding:56px 16px}
+.empty h2{color:var(--text);font-size:20px;margin-bottom:6px}
+.empty .btn{margin-top:18px}
+.search{display:flex;gap:8px;margin-bottom:14px}
+.search input{flex:1;min-width:0;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--surface);padding:0 14px;font-size:17px}
+.search input:focus,.field input:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.result .btn{flex:none}
+.sub{font-size:14px;color:var(--muted)}
+.hero{display:flex;gap:14px;margin:4px 0 16px}
+.hero .poster{width:96px;height:138px;border-radius:10px}
+.hero .info{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.hero h2{font-size:22px;line-height:1.2}
+.field label{display:block;font-size:12px;font-weight:650;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-bottom:4px}
+.field input{width:100%;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:0 12px}
+.season{background:var(--surface);border:1px solid var(--line);border-radius:14px;margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow)}
+.season-head{display:flex;align-items:center;gap:10px;padding:12px 14px;width:100%;text-align:left}
+.season-head .t{flex:1;font-weight:650}
+.season-head .sub{font-variant-numeric:tabular-nums}
+.chev{transition:transform .15s;color:var(--muted);width:18px;height:18px}
+.season.open .chev{transform:rotate(90deg)}
+.eps{display:none;border-top:1px solid var(--line)}
+.season.open .eps{display:block}
+.season-tools{display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.ep{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.ep:last-child{border-bottom:0}
+.ep .num{font-size:13px;color:var(--muted);width:30px;flex:none;font-variant-numeric:tabular-nums}
+.ep .body{flex:1;min-width:0}
+.ep .title{font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ep .date{font-size:13px;color:var(--muted)}
+.ep.future{opacity:.55}
+.ep.seen .title{color:var(--muted)}
+.check{width:32px;height:32px;border-radius:999px;border:2px solid var(--line);flex:none;display:flex;align-items:center;justify-content:center}
+.check svg{width:16px;height:16px;opacity:0}
+.ep.seen .check{background:var(--good);border-color:var(--good);color:#fff}
+.ep.seen .check svg{opacity:1}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);transform:translateX(-50%);z-index:20;
+  background:var(--text);color:var(--bg);border-radius:14px;padding:10px 10px 10px 16px;display:flex;align-items:center;gap:12px;
+  width:calc(100% - 32px);max-width:480px;font-size:15px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.toast span{flex:1}
+.toast .btn{background:var(--accent);color:var(--accent-ink)}
+.toast .x{color:var(--bg);opacity:.7;padding:0 6px;height:32px}
+.menu{position:fixed;inset:0;z-index:15;background:rgba(0,0,0,.4);display:flex;align-items:flex-end;justify-content:center}
+.sheet{background:var(--surface);width:100%;max-width:520px;border-radius:18px 18px 0 0;padding:18px 16px calc(env(safe-area-inset-bottom) + 18px);display:flex;flex-direction:column;gap:10px}
+.sheet h3{font-size:18px}
+.sheet .btn{width:100%;height:46px}
+.sheet p{color:var(--muted);font-size:14px}
+.spinner{width:22px;height:22px;border:3px solid var(--surface2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:40px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+.err{color:var(--danger);padding:16px 0}
+.err p{color:var(--muted);font-size:14px;margin-top:6px}
+.section-label{font-size:13px;font-weight:650;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:18px 0 8px}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<nav id="tabs" class="tabs" hidden>
+  <button data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></svg>My Shows</button>
+  <button data-tab="explore"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>Explore</button>
+</nav>
+<div id="overlay"></div>
+<input type="file" id="importFile" accept="application/json,.json" hidden>
+<script>
+(() => {
+"use strict";
+
+/* ---------- storage ---------- */
+const KEY = "myshows-v1";
+const STALE_MS = 12 * 60 * 60 * 1000; // refresh episode lists twice a day at most
+let db = loadDb();
+function loadDb() {
+  try { const v = JSON.parse(localStorage.getItem(KEY)); if (v && v.shows) return v; } catch {}
+  return { shows: {} };
+}
+function saveDb() {
+  try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { toast("Couldn't save — storage is full or blocked."); }
+}
+
+/* ---------- TVMaze API (free, no key) ---------- */
+const API = "https://api.tvmaze.com";
+class NetError extends Error {}
+async function api(path, tries = 0) {
+  let r;
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 15000);
+    r = await fetch(API + path, { signal: ctl.signal });
+    clearTimeout(timer);
+  } catch (e) {
+    throw new NetError(e && e.name === "AbortError" ? "timeout" : "blocked");
+  }
+  if (r.status === 429 && tries < 3) { await new Promise(res => setTimeout(res, 1500)); return api(path, tries + 1); }
+  if (!r.ok) throw new Error("TVMaze returned " + r.status);
+  return r.json();
+}
+const serviceOf = s => (s.webChannel && s.webChannel.name) || (s.network && s.network.name) || "";
+function slimEpisodes(list) {
+  return (list || []).map(e => ({
+    id: e.id, s: e.season, n: e.number, name: e.name || "TBA",
+    date: e.airdate || "", stamp: e.airstamp || "", special: e.number == null || e.type === "significant_special" || e.type === "insignificant_special"
+  }));
+}
+async function fetchShow(id) {
+  const s = await api(`/shows/${id}?embed=episodes`);
+  return {
+    name: s.name,
+    image: s.image ? (s.image.medium || s.image.original) : "",
+    status: s.status || "",
+    year: (s.premiered || "").slice(0, 4),
+    defaultService: serviceOf(s),
+    episodes: slimEpisodes(s._embedded && s._embedded.episodes),
+    fetchedAt: Date.now()
+  };
+}
+async function refreshShow(id, force) {
+  const show = db.shows[id];
+  if (!show) return false;
+  if (!force && show.fetchedAt && Date.now() - show.fetchedAt < STALE_MS) return false;
+  const fresh = await fetchShow(id);
+  Object.assign(db.shows[id], fresh); // keeps service + watched
+  saveDb();
+  return true;
+}
+
+/* ---------- helpers ---------- */
+const $ = (sel, el = document) => el.querySelector(sel);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const today = () => new Date().toISOString().slice(0, 10);
+const aired = e => {
+  if (e.stamp) return new Date(e.stamp).getTime() <= Date.now();
+  return !!e.date && e.date <= today();
+};
+const code = e => e.n == null ? `S${e.s} Special` : `S${e.s}E${e.n}`;
+const fmtDate = d => d ? new Date(d + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "Date TBA";
+const regularEps = show => show.episodes.filter(e => !e.special);
+function stats(show) {
+  const w = show.watched || {};
+  const reg = regularEps(show);
+  const airedReg = reg.filter(aired);
+  const seen = airedReg.filter(e => w[e.id]).length;
+  const next = airedReg.find(e => !w[e.id]);
+  const upcoming = reg.find(e => !aired(e)); // next new episode to come out
+  return { total: airedReg.length, seen, next, upcoming, remaining: airedReg.length - seen,
+           everWatched: Object.keys(w).length > 0 };
+}
+function posterHtml(img, name, cls = "poster") {
+  return img ? `<img class="${cls}" src="${esc(img)}" alt="" loading="lazy">`
+             : `<div class="${cls}">${esc((name || "?").trim().charAt(0).toUpperCase())}</div>`;
+}
+const ICON = {
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+  back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
+  more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
+  check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  star: '<svg viewBox="0 0 24 24" stroke-width="2" stroke-linejoin="round"><path d="M12 3.3l2.7 5.5 6 .9-4.35 4.2 1.03 6L12 17.05 6.62 19.9l1.03-6L3.3 9.7l6-.9z"/></svg>',
+  chev: '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>'
+};
+
+/* ---------- service badges (simple colored monograms, not official logos) ---------- */
+const SERVICE_STYLE = [
+  [/netflix/i, "N", "#d81f26"], [/hulu/i, "h", "#1ce783", "#0b0c0f"], [/^max$|hbo/i, "M", "#002be7"],
+  [/disney/i, "D+", "#0b2a6f"], [/prime|amazon/i, "P", "#00a8e1"], [/apple/i, "tv", "#000000"],
+  [/peacock/i, "P", "#5a2ca0"], [/paramount|cbs/i, "P+", "#0064ff"], [/youtube/i, "▶", "#ff0000"],
+  [/fx/i, "FX", "#222222"], [/amc/i, "A", "#111111"], [/starz/i, "S", "#111111"], [/showtime/i, "S", "#b10000"],
+  [/abc/i, "abc", "#111111"], [/nbc/i, "N", "#5a2ca0"], [/fox/i, "F", "#003a70"], [/pbs/i, "P", "#2638c4"],
+  [/bbc/i, "B", "#111111"], [/crunchyroll/i, "C", "#f47521"], [/cable|live/i, "TV", "#555b66"]
+];
+function serviceIcon(name, size = 22) {
+  if (!name) return `<span class="svc-ico" style="width:${size}px;height:${size}px;background:var(--surface2);color:var(--muted)">?</span>`;
+  let m = SERVICE_STYLE.find(([re]) => re.test(name));
+  if (!m) {
+    let h = 0; for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    m = [null, name.trim().charAt(0).toUpperCase(), `hsl(${h % 360} 55% 38%)`];
+  }
+  const [, label, bg, fg = "#fff"] = m;
+  const fs = Math.round(size * (label.length > 2 ? .36 : label.length > 1 ? .44 : .58));
+  return `<span class="svc-ico" aria-hidden="true" style="width:${size}px;height:${size}px;background:${bg};color:${fg};font-size:${fs}px">${esc(label)}</span>`;
+}
+
+function starBtn(on, label, extra = "") {
+  return `<button class="star ${on ? "on" : ""} ${extra}" data-star aria-pressed="${on}" aria-label="${on ? "Remove " + esc(label) + " from my list" : "Add " + esc(label) + " to my list"}">${ICON.star}</button>`;
+}
+// Remove a show or movie from the list, with an Undo.
+function removeItem(kind, id) {
+  const store = kind === "show" ? db.shows : (db.movies = db.movies || {});
+  const backup = store[id];
+  if (!backup) return;
+  delete store[id]; saveDb(); refresh();
+  toast(`Removed ${backup.name || backup.title}.`, "Undo", () => { store[id] = backup; saveDb(); refresh(); });
+}
+function refresh() {
+  const h = location.hash.replace(/^#\/?/, "");
+  if (h === "explore") drawExploreGrid();
+  else if (!h || h === "/") renderHome();
+  else render();
+}
+// Enter/Space on clickable non-button elements
+document.addEventListener("keydown", e => {
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches('[role="button"]')) { e.preventDefault(); e.target.click(); }
+});
+
+/* ---------- toast / sheet ---------- */
+let toastTimer;
+function toast(msg, actionLabel, action) {
+  clearTimeout(toastTimer);
+  const ov = $("#overlay");
+  ov.querySelector(".toast")?.remove();
+  const t = document.createElement("div");
+  t.className = "toast";
+  t.innerHTML = `<span>${esc(msg)}</span>${actionLabel ? `<button class="btn small">${esc(actionLabel)}</button>` : ""}<button class="x" aria-label="Dismiss">✕</button>`;
+  ov.appendChild(t);
+  const close = () => t.remove();
+  t.querySelector(".x").onclick = close;
+  if (actionLabel) t.querySelector(".btn").onclick = () => { close(); action(); };
+  toastTimer = setTimeout(close, actionLabel ? 7000 : 3000);
+}
+function sheet(html, bind, closeLabel = "Cancel") {
+  const ov = $("#overlay");
+  const m = document.createElement("div");
+  m.className = "menu";
+  m.innerHTML = `<div class="sheet">${html}<button class="btn ghost" data-close>${closeLabel}</button></div>`;
+  m.onclick = e => { if (e.target === m || e.target.closest("[data-close]")) m.remove(); };
+  ov.appendChild(m);
+  bind && bind(m, () => m.remove());
+}
+
+/* ---------- routing ---------- */
+const app = $("#app");
+let filter = "All";
+let openSeasons = {}; // showId -> Set of open season numbers
+window.addEventListener("hashchange", render);
+$("#tabs").querySelectorAll("button").forEach(b => b.onclick = () => go(b.dataset.tab === "home" ? "/" : "/explore"));
+function go(hash) { location.hash = hash; }
+function render() {
+  const h = location.hash.replace(/^#\/?/, "");
+  window.scrollTo(0, 0);
+  const showMatch = h.match(/^show\/(\d+)$/);
+  const tab = h === "explore" ? "explore" : h === "add" || (showMatch && db.shows[showMatch[1]]) ? null : "home";
+  $("#tabs").hidden = !tab;
+  document.body.classList.toggle("has-tabs", !!tab);
+  $("#tabs").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+  if (h === "add") return renderAdd();
+  if (h === "explore") return renderExplore();
+  const m = h.match(/^show\/(\d+)$/);
+  if (m && db.shows[m[1]]) return renderShow(m[1]);
+  renderHome();
+}
+
+/* ---------- home ---------- */
+function renderHome() {
+  const shows = Object.values(db.shows);
+  const movies = Object.values(db.movies || {});
+  const services = [...new Set([...shows, ...movies].map(s => s.service || "No service set"))].sort((a, b) => a.localeCompare(b));
+  const visibleMovies = movies.filter(m => filter === "All" || (m.service || "No service set") === filter)
+    .sort((a, b) => (a.watched ? 1 : 0) - (b.watched ? 1 : 0) || (b.addedAt || 0) - (a.addedAt || 0));
+  if (filter !== "All" && !services.includes(filter)) filter = "All";
+
+  const visible = shows.filter(s => filter === "All" || (s.service || "No service set") === filter);
+  const withStats = visible.map(s => ({ s, st: stats(s) }));
+  const byName = (a, b) => (a.s.name || "").localeCompare(b.s.name || "");
+  const bySoonest = (a, b) => (a.st.upcoming?.stamp || a.st.upcoming?.date || "~").localeCompare(b.st.upcoming?.stamp || b.st.upcoming?.date || "~") || byName(a, b);
+  const watching = withStats.filter(x => x.st.everWatched && x.st.next)
+    .sort((a, b) => (b.s.lastWatchedAt || 0) - (a.s.lastWatchedAt || 0) || byName(a, b));
+  const caught = withStats.filter(x => x.st.everWatched && !x.st.next).sort(bySoonest);
+  const notStarted = withStats.filter(x => !x.st.everWatched).sort(byName);
+  const textView = settings().view === "text";
+  const section = (title, hint, list) => list.length
+    ? `<div class="section-label ${textView ? "with-cols" : ""}">${title} <span class="n">${list.length}</span>${textView ? `<span class="cols"><span>Left</span><span>New ep</span></span>` : ""}</div>${hint && !textView ? `<p class="hint">${hint}</p>` : ""}
+       ${textView ? `<div class="rows">${list.map(rowHtml).join("")}</div>` : `<div class="list">${list.map(cardHtml).join("")}</div>`}` : "";
+  const viewToggle = `<div class="seg mini" role="group" aria-label="View">
+      <button data-view="cards" class="${textView ? "" : "on"}" aria-label="Cards view" title="Cards"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/></svg></button>
+      <button data-view="text" class="${textView ? "on" : ""}" aria-label="Text view" title="Text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg></button>
+    </div>`;
+
+  app.innerHTML = `
+    <header class="bar">
+      <h1>My Shows</h1>
+      <button class="icon-btn" id="menuBtn" aria-label="Menu">${ICON.more}</button>
+      <button class="btn" id="addBtn">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add show</button>
+    </header>
+    ${shows.length || movies.length ? `
+      <div class="toolbar">
+        ${services.length > 1 ? `<div class="chips">${["All", ...services].map(s => `<button class="chip ${s === filter ? "on" : ""}" data-f="${esc(s)}">${esc(s)}</button>`).join("")}</div>` : `<div class="chips"></div>`}
+        ${viewToggle}
+      </div>
+      ${section("Watching", "", watching)}
+      ${section("Caught up", "", caught)}
+      ${section("Haven't started", "Saved for later. Check off an episode and it moves up to Watching.", notStarted)}
+      ${visibleMovies.length ? `<div class="section-label">Movies <span class="n">${visibleMovies.filter(m => !m.watched).length || "all watched"}</span></div>${textView ? `<div class="rows">${visibleMovies.map(movieRowHtml).join("")}</div>` : `<div class="list">${visibleMovies.map(movieCardHtml).join("")}</div>`}` : ""}
+    ` : `
+      <div class="empty">
+        <h2>No shows yet</h2>
+        <p>Add the shows you're watching and check off episodes as you go.</p>
+        <button class="btn" id="addBtn2">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add your first show</button>
+        <p style="margin-top:14px">or <a href="#/explore">explore what's popular</a></p>
+      </div>`}
+  `;
+  $("#addBtn").onclick = () => go("/add");
+  $("#addBtn2") && ($("#addBtn2").onclick = () => go("/add"));
+  $("#menuBtn").onclick = openMainMenu;
+  app.querySelectorAll(".chip").forEach(c => c.onclick = () => { filter = c.dataset.f; renderHome(); });
+  app.querySelectorAll("[data-view]").forEach(b => b.onclick = () => { settings().view = b.dataset.view; saveDb(); renderHome(); });
+  app.querySelectorAll("[data-show]").forEach(c => c.onclick = e => {
+    if (e.target.closest("[data-star]")) return removeItem("show", c.dataset.show);
+    go("/show/" + c.dataset.show);
+  });
+  app.querySelectorAll("[data-movie]").forEach(c => c.onclick = e => {
+    const id = c.dataset.movie;
+    if (e.target.closest("[data-star]")) return removeItem("movie", id);
+    if (e.target.closest(".check")) { db.movies[id].watched = !db.movies[id].watched; saveDb(); renderHome(); return; }
+    openExploreItem("movie", id);
+  });
+
+  // quietly refresh stale shows (new episodes) in the background
+  backgroundRefresh();
+}
+function airLabel(e) {
+  if (!e.date) return "date not announced yet";
+  const d = new Date(e.date + "T12:00:00"), now = new Date();
+  const days = Math.round((new Date(e.date + "T00:00:00") - new Date(today() + "T00:00:00")) / 86400000);
+  if (days === 0) return "today";
+  if (days === 1) return "tomorrow";
+  const opts = { weekday: "short", month: "short", day: "numeric" };
+  if (d.getFullYear() !== now.getFullYear()) opts.year = "numeric";
+  return d.toLocaleDateString(undefined, opts) + (days < 7 ? ` (in ${days} days)` : "");
+}
+function cardHtml({ s, st }) {
+  const started = st.everWatched;
+  const counts = started
+    ? `<span class="pill seen">✓ ${st.seen} seen</span>` + (st.remaining ? `<span class="pill left">${st.remaining} left</span>` : `<span class="pill">all caught up</span>`)
+    : `<span class="pill left">${st.total} episode${st.total === 1 ? "" : "s"}</span>`;
+  const nextUp = started && st.next ? `<div class="next">Up next: <b>${esc(code(st.next))}</b> · ${esc(st.next.name)}</div>` : "";
+  const air = st.upcoming
+    ? `<div class="air"><b>New episode:</b> ${esc(airLabel(st.upcoming))}</div>`
+    : `<div class="air muted">${s.status === "Ended" ? "Series has ended" : "No new episodes announced"}</div>`;
+  const pct = st.total ? Math.round(st.seen / st.total * 100) : 0;
+  return `<div class="card" data-show="${s.id}" role="button" tabindex="0">
+    ${posterHtml(s.image, s.name)}
+    <div class="meta">
+      <div class="name">${esc(s.name)}</div>
+      <span class="svc ${s.service ? "" : "none"}">${serviceIcon(s.service, 18)}${esc(s.service || "No service set")}</span>
+      <div class="pills">${counts}</div>
+      ${nextUp}
+      ${air}
+      ${started ? `<div class="progress"><i style="width:${pct}%"></i></div>` : ""}
+    </div>
+    ${starBtn(true, s.name)}
+  </div>`;
+}
+let refreshing = false;
+async function backgroundRefresh() {
+  if (refreshing) return;
+  refreshing = true;
+  let changed = false;
+  for (const id of Object.keys(db.shows)) {
+    try { if (await refreshShow(id)) changed = true; } catch {}
+  }
+  refreshing = false;
+  if (changed && !location.hash.replace(/^#\/?/, "")) renderHome();
+}
+
+function openMainMenu() {
+  sheet(`
+    <h3>Backup</h3>
+    <p>Your shows are saved in this browser only. Export a backup file to keep them safe or move them to another device.</p>
+    <button class="btn" data-a="export">Export backup</button>
+    <button class="btn ghost" data-a="import">Import backup</button>
+  `, (m, close) => {
+    m.querySelector('[data-a="export"]').onclick = () => { exportBackup(); close(); };
+    m.querySelector('[data-a="import"]').onclick = () => { close(); $("#importFile").click(); };
+  });
+}
+function exportBackup() {
+  const blob = new Blob([JSON.stringify(db, null, 1)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `my-shows-backup-${today()}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+$("#importFile").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = "";
+  if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    if (!data || typeof data.shows !== "object") throw 0;
+    const n = Object.keys(data.shows).length;
+    if (!confirm(`Replace your current list with ${n} show${n === 1 ? "" : "s"} from this backup?`)) return;
+    db = data; saveDb(); render(); toast("Backup restored.");
+  } catch { toast("That file isn't a My Shows backup."); }
+};
+
+function netProblem(e) {
+  if (!navigator.onLine) return `<b>You're offline.</b><p>Connect to the internet and try again.</p>`;
+  if (e instanceof NetError && e.message === "timeout") return `<b>The show database didn't answer.</b><p>It may be busy. Try again in a minute.</p>`;
+  if (e instanceof NetError) return `<b>This page isn't allowed to go online from where it's open.</b>
+    <p>Searching needs to reach the show database (tvmaze.com). Previews (inside the Claude app, email, or the Files app)
+    block that. Open the page in Safari or Chrome instead, or from its web address once it's hosted.</p>`;
+  return `<b>Search failed.</b><p>${esc(e.message || "Unknown error")}. Try again in a minute.</p>`;
+}
+
+/* ---------- add ---------- */
+let lastQuery = "", lastResults = null;
+function renderAdd() {
+  lastQuery = ""; lastResults = null; searchSeq++;
+  app.innerHTML = `
+    <header class="bar">
+      <button class="icon-btn" id="back" aria-label="Back">${ICON.back}</button>
+      <h1>Add a show</h1>
+    </header>
+    <form class="search" id="searchForm">
+      <input id="q" type="search" placeholder="Show name" autocomplete="off" enterkeyhint="search" value="${esc(lastQuery)}">
+      <button class="btn" type="submit">Search</button>
+    </form>
+    <div id="results"></div>
+  `;
+  $("#back").onclick = () => go("/");
+  const q = $("#q");
+  setTimeout(() => q.focus(), 50);
+  let timer;
+  q.oninput = () => { clearTimeout(timer); timer = setTimeout(() => search(q.value), 350); };
+  $("#searchForm").onsubmit = e => { e.preventDefault(); clearTimeout(timer); search(q.value); q.blur(); };
+  if (lastResults) drawResults(lastResults);
+}
+let searchSeq = 0;
+async function search(text) {
+  text = text.trim();
+  lastQuery = text;
+  const out = $("#results");
+  if (!text) { out.innerHTML = ""; lastResults = null; return; }
+  const seq = ++searchSeq;
+  out.innerHTML = `<div class="spinner"></div>`;
+  try {
+    const res = await api(`/search/shows?q=${encodeURIComponent(text)}`);
+    if (seq !== searchSeq) return;
+    lastResults = res.map(r => r.show);
+    drawResults(lastResults);
+  } catch (e) {
+    if (seq !== searchSeq) return;
+    out.innerHTML = `<div class="err">${netProblem(e)}</div>`;
+  }
+}
+function drawResults(list) {
+  const out = $("#results");
+  if (!list.length) { out.innerHTML = `<p class="empty">No shows found by that name.</p>`; return; }
+  out.innerHTML = `<div class="list">${list.map(s => {
+    const have = !!db.shows[s.id];
+    const yr = (s.premiered || "").slice(0, 4);
+    const ended = s.ended ? s.ended.slice(0, 4) : "";
+    const span = yr ? (s.status === "Ended" && ended && ended !== yr ? `${yr}–${ended}` : s.status === "Running" ? `${yr}–` : yr) : "";
+    const svc = serviceOf(s);
+    return `<div class="card result">
+      ${posterHtml(s.image && (s.image.medium || s.image.original), s.name)}
+      <div class="meta">
+        <div class="name">${esc(s.name)}</div>
+        <div class="sub">${[span, svc].filter(Boolean).map(esc).join(" · ") || "&nbsp;"}</div>
+      </div>
+      ${have ? `<button class="btn ghost small" data-open="${s.id}">Added ✓</button>` : `<button class="btn small" data-add="${s.id}">Add</button>`}
+    </div>`;
+  }).join("")}</div>`;
+  out.querySelectorAll("[data-open]").forEach(b => b.onclick = () => go("/show/" + b.dataset.open));
+  out.querySelectorAll("[data-add]").forEach(b => b.onclick = () => addShow(b.dataset.add, b));
+}
+async function addShow(id, btn) {
+  btn.disabled = true; btn.textContent = "Adding…";
+  try {
+    const data = await fetchShow(id);
+    db.shows[id] = { id: Number(id), service: data.defaultService, watched: {}, addedAt: Date.now(), ...data };
+    saveDb();
+    go("/show/" + id);
+  } catch {
+    btn.disabled = false; btn.textContent = "Add";
+    toast("Couldn't add that show. Try again.");
+  }
+}
+
+/* ---------- movies on the home list ---------- */
+function shortDate(e) {
+  if (!e || !e.date) return "";
+  const days = Math.round((new Date(e.date + "T00:00:00") - new Date(today() + "T00:00:00")) / 86400000);
+  if (days === 0) return "Today";
+  if (days === 1) return "Tmrw";
+  const d = new Date(e.date + "T12:00:00");
+  const opts = { month: "short", day: "numeric" };
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = "2-digit";
+  return d.toLocaleDateString(undefined, opts);
+}
+function rowHtml({ s, st }) {
+  const started = st.everWatched;
+  const status = !started ? `${st.total} eps`
+    : st.remaining ? `<b>${st.remaining}</b> left` : `<span class="ok">✓</span>`;
+  const nextCode = started && st.next ? `<span class="code">${esc(code(st.next))}</span>` : "";
+  const when = st.upcoming ? (shortDate(st.upcoming) || "TBA") : (s.status === "Ended" ? "Ended" : "—");
+  return `<div class="row" data-show="${s.id}" role="button" tabindex="0">
+    ${serviceIcon(s.service, 18)}
+    <span class="rn">${esc(s.name)}${nextCode}</span>
+    <span class="rs">${status}</span>
+    <span class="rw ${st.upcoming ? "soon" : ""}" title="Next new episode">${esc(when)}</span>
+    ${starBtn(true, s.name, "sm")}
+  </div>`;
+}
+function movieRowHtml(m) {
+  return `<div class="row ${m.watched ? "seen" : ""}" data-movie="${m.id}" role="button" tabindex="0">
+    ${serviceIcon(m.service, 18)}
+    <span class="rn">${esc(m.title)}<span class="code">${esc(m.year || "")}</span></span>
+    <button class="check sm" aria-label="Watched">${ICON.check}</button>
+    ${starBtn(true, m.title, "sm")}
+  </div>`;
+}
+function movieCardHtml(m) {
+  return `<div class="card movie ${m.watched ? "seen" : ""}" data-movie="${m.id}" role="button" tabindex="0">
+    ${posterHtml(m.poster, m.title)}
+    <div class="meta">
+      <div class="name">${esc(m.title)}</div>
+      <span class="svc ${m.service ? "" : "none"}">${serviceIcon(m.service, 18)}${esc(m.service || "No service set")}</span>
+      <div class="next">${[m.year, "Movie"].filter(Boolean).map(esc).join(" · ")}${m.watched ? " · <b>Watched</b>" : ""}</div>
+    </div>
+    <button class="check" aria-label="Watched">${ICON.check}</button>
+    ${starBtn(true, m.title)}
+  </div>`;
+}
+
+/* ---------- Explore (TMDB: popular shows & movies by streaming service) ---------- */
+const TMDB = "https://api.themoviedb.org/3";
+const IMG = "https://image.tmdb.org/t/p/";
+const settings = () => (db.settings = db.settings || {});
+const tmdbKey = () => (settings().tmdbKey || "").trim();
+const region = () => (settings().region || ((navigator.language || "en-US").split("-")[1] || "US")).toUpperCase();
+async function tmdb(path, params = {}) {
+  const key = tmdbKey();
+  if (!key) throw new Error("nokey");
+  const u = new URL(TMDB + path);
+  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== "") u.searchParams.set(k, v);
+  const headers = {};
+  if (key.startsWith("eyJ")) headers.Authorization = "Bearer " + key; else u.searchParams.set("api_key", key);
+  let r;
+  try { r = await fetch(u, { headers }); } catch { throw new NetError("blocked"); }
+  if (r.status === 401) throw new Error("badkey");
+  if (!r.ok) throw new Error("TMDB returned " + r.status);
+  return r.json();
+}
+const MAIN_PROVIDERS = [
+  ["Netflix", /^netflix$/i], ["Prime Video", /^amazon prime video$/i], ["Disney+", /^disney( plus|\+)$/i],
+  ["Max", /^(hbo )?max$/i], ["Hulu", /^hulu$/i], ["Apple TV+", /^apple tv( plus|\+)?$/i],
+  ["Peacock", /^peacock( premium)?( plus)?$/i], ["Paramount+", /^paramount( plus|\+)$/i]
+];
+const friendlyProvider = name => (MAIN_PROVIDERS.find(([, re]) => re.test(name.trim())) || [name])[0];
+const providerCache = {};
+async function providers(type) {
+  const k = type + "-" + region();
+  if (providerCache[k]) return providerCache[k];
+  const list = (await tmdb(`/watch/providers/${type}`, { watch_region: region() })).results || [];
+  const out = [];
+  for (const [label, re] of MAIN_PROVIDERS) {
+    const hits = list.filter(p => re.test(p.provider_name.trim()));
+    if (hits.length) out.push({ label, ids: hits.map(p => p.provider_id), logo: hits[0].logo_path });
+  }
+  return (providerCache[k] = out);
+}
+const ex = { type: "tv", prov: "All", sort: "popular", page: 1, pages: 1, items: [], seq: 0, error: null, loading: false };
+
+function renderExplore() {
+  app.innerHTML = `
+    <header class="bar">
+      <h1>Explore</h1>
+      <button class="icon-btn" id="exSettings" aria-label="Explore settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+    </header>
+    <div id="exBody"></div>
+    <p class="credit">Show and movie info from TMDB; streaming availability from JustWatch. This app uses the TMDB API but is not endorsed or certified by TMDB.</p>
+  `;
+  $("#exSettings").onclick = openExploreSettings;
+  if (!tmdbKey()) return drawExploreSetup();
+  drawExploreControls();
+  if (!ex.items.length && !ex.loading) loadExplore(true); else drawExploreGrid();
+}
+function drawExploreSetup() {
+  $("#exBody").innerHTML = `
+    <div class="setup">
+      <h2>One-time setup</h2>
+      <p>Explore uses <b>TMDB</b>, a free movie &amp; TV database, to show what's popular on each streaming service. It needs your own free key:</p>
+      <ol>
+        <li>Make a free account at <a href="https://www.themoviedb.org/signup" target="_blank" rel="noopener">themoviedb.org</a>.</li>
+        <li>Open <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">Settings → API</a> and request a key (choose <i>Personal</i> use).</li>
+        <li>Copy the <b>API Read Access Token</b> (or the API Key) and paste it here.</li>
+      </ol>
+      <div class="search"><input id="keyIn" placeholder="Paste your TMDB key" autocomplete="off" spellcheck="false"><button class="btn" id="keySave">Save</button></div>
+      <p class="sub">The key is stored only in this browser.</p>
+      <div id="keyErr"></div>
+    </div>`;
+  $("#keySave").onclick = () => saveKey($("#keyIn").value, $("#keyErr"));
+}
+async function saveKey(val, errEl) {
+  const old = settings().tmdbKey;
+  settings().tmdbKey = val.trim();
+  if (!tmdbKey()) return;
+  errEl.innerHTML = `<div class="spinner"></div>`;
+  try {
+    for (const k in providerCache) delete providerCache[k];
+    await providers("tv");
+    saveDb(); ex.items = []; renderExplore();
+    return true;
+  } catch (e) {
+    settings().tmdbKey = old;
+    errEl.innerHTML = `<div class="err">${e.message === "badkey" ? "<b>TMDB didn't accept that key.</b><p>Double-check you copied the whole thing.</p>" : netProblem(e)}</div>`;
+  }
+}
+function openExploreSettings() {
+  sheet(`
+    <h3>Explore settings</h3>
+    <div class="field"><label for="setKey">TMDB key</label><input id="setKey" value="${esc(tmdbKey())}" autocomplete="off" spellcheck="false"></div>
+    <div class="field"><label for="setRegion">Country (2-letter code)</label><input id="setRegion" value="${esc(region())}" maxlength="2" autocapitalize="characters"></div>
+    <div id="setErr"></div>
+    <button class="btn" data-a="save">Save</button>
+  `, (m, close) => {
+    m.querySelector('[data-a="save"]').onclick = async () => {
+      const r = m.querySelector("#setRegion").value.trim().toUpperCase();
+      if (/^[A-Z]{2}$/.test(r)) settings().region = r;
+      for (const k in providerCache) delete providerCache[k];
+      ex.items = []; ex.prov = "All";
+      const ok = await saveKey(m.querySelector("#setKey").value, m.querySelector("#setErr"));
+      if (ok || !tmdbKey()) { saveDb(); close(); renderExplore(); }
+    };
+  });
+}
+async function drawExploreControls() {
+  const body = $("#exBody");
+  body.innerHTML = `
+    <div class="seg">${[["tv", "TV shows"], ["movie", "Movies"]].map(([v, l]) => `<button data-type="${v}" class="${ex.type === v ? "on" : ""}">${l}</button>`).join("")}</div>
+    <div class="chips" id="provChips"><button class="chip on">All services</button></div>
+    <div class="chips sorts">${[["popular", "Most popular"], ["top", "Top rated"], ["new", "Newest"]].map(([v, l]) => `<button class="chip ${ex.sort === v ? "on" : ""}" data-sort="${v}">${l}</button>`).join("")}</div>
+    <div id="exGrid"></div>`;
+  body.querySelectorAll("[data-type]").forEach(b => b.onclick = () => { if (ex.type !== b.dataset.type) { ex.type = b.dataset.type; drawExploreControls(); loadExplore(true); } });
+  body.querySelectorAll("[data-sort]").forEach(b => b.onclick = () => { ex.sort = b.dataset.sort; body.querySelectorAll("[data-sort]").forEach(x => x.classList.toggle("on", x === b)); loadExplore(true); });
+  try {
+    const provs = await providers(ex.type);
+    if (!provs.some(p => p.label === ex.prov)) ex.prov = "All";
+    const chips = $("#provChips");
+    if (!chips) return;
+    chips.innerHTML = [{ label: "All" }, ...provs].map(p => `<button class="chip prov ${ex.prov === p.label ? "on" : ""}" data-prov="${esc(p.label)}">
+      ${p.logo ? `<img onerror="this.remove()" src="${IMG}w92${esc(p.logo)}" alt="">` : ""}${p.label === "All" ? "All services" : esc(p.label)}</button>`).join("");
+    chips.querySelectorAll("[data-prov]").forEach(b => b.onclick = () => { ex.prov = b.dataset.prov; chips.querySelectorAll("[data-prov]").forEach(x => x.classList.toggle("on", x === b)); loadExplore(true); });
+  } catch {}
+}
+async function loadExplore(reset) {
+  if (reset) { ex.page = 1; ex.items = []; ex.error = null; }
+  const seq = ++ex.seq;
+  ex.loading = true; drawExploreGrid();
+  try {
+    const provs = await providers(ex.type);
+    const ids = ex.prov === "All" ? provs.flatMap(p => p.ids) : (provs.find(p => p.label === ex.prov) || { ids: [] }).ids;
+    const dateField = ex.type === "tv" ? "first_air_date" : "primary_release_date";
+    const params = { watch_region: region(), with_watch_providers: ids.join("|"), with_watch_monetization_types: "flatrate",
+                     page: ex.page, include_adult: "false", language: navigator.language || "en-US" };
+    if (ex.sort === "popular") params.sort_by = "popularity.desc";
+    if (ex.sort === "top") { params.sort_by = "vote_average.desc"; params["vote_count.gte"] = ex.type === "tv" ? 200 : 500; }
+    if (ex.sort === "new") { params.sort_by = dateField + ".desc"; params[dateField + ".lte"] = today(); params["vote_count.gte"] = 10; }
+    const res = await tmdb(`/discover/${ex.type}`, params);
+    if (seq !== ex.seq) return;
+    const seen = new Set(ex.items.map(i => i.id));
+    ex.items.push(...(res.results || []).filter(i => !seen.has(i.id)));
+    ex.pages = res.total_pages || 1;
+    ex.error = null;
+  } catch (e) {
+    if (seq !== ex.seq) return;
+    ex.error = e;
+  }
+  ex.loading = false;
+  drawExploreGrid();
+}
+// The library entry for a TMDB item (shows added by search are matched by name + year).
+function libraryEntry(type, item) {
+  if (type === "movie") return (db.movies || {})[item.id] ? { kind: "movie", id: item.id } : null;
+  const shows = Object.values(db.shows);
+  const name = (item.name || "").toLowerCase(), yr = (item.first_air_date || "").slice(0, 4);
+  const s = shows.find(s => s.tmdbId === item.id) || shows.find(s => !s.tmdbId && (s.name || "").toLowerCase() === name && (!yr || !s.year || s.year === yr));
+  return s ? { kind: "show", id: s.id } : null;
+}
+const inLibrary = (type, item) => !!libraryEntry(type, item);
+const tmdbDetails = (type, id) => tmdb(`/${type}/${id}`, { append_to_response: type === "tv" ? "watch/providers,external_ids" : "watch/providers", language: navigator.language || "en-US" });
+const streamingOn = d => (((d["watch/providers"] || {}).results || {})[region()]?.flatrate || []);
+function pickServiceFrom(d) {
+  const names = streamingOn(d).map(p => friendlyProvider(p.provider_name));
+  return ex.prov !== "All" && names.includes(ex.prov) ? ex.prov : names[0] || "";
+}
+// Add a TMDB show/movie to the list. Returns { kind, id, title }.
+async function addFromTmdb(type, id, d) {
+  d = d || await tmdbDetails(type, id);
+  const title = d.title || d.name, year = (d.release_date || d.first_air_date || "").slice(0, 4);
+  if (type === "movie") {
+    db.movies = db.movies || {};
+    db.movies[id] = { id: Number(id), title, year, poster: d.poster_path ? IMG + "w185" + d.poster_path : "", service: pickServiceFrom(d), watched: false, addedAt: Date.now() };
+    saveDb();
+    return { kind: "movie", id: Number(id), title };
+  }
+  const mazeId = await findOnTvMaze(d, title, year);
+  if (!mazeId) throw new Error("notfound");
+  if (!db.shows[mazeId]) {
+    const data = await fetchShow(mazeId);
+    db.shows[mazeId] = { id: mazeId, watched: {}, addedAt: Date.now(), ...data, service: pickServiceFrom(d) || data.defaultService };
+  }
+  db.shows[mazeId].tmdbId = Number(id);
+  saveDb();
+  return { kind: "show", id: mazeId, title };
+}
+const starring = new Set(); // "tv-123" while an add is in progress
+function drawExploreGrid() {
+  const grid = $("#exGrid");
+  if (!grid) return;
+  if (ex.error && !ex.items.length) {
+    grid.innerHTML = `<div class="err">${ex.error.message === "badkey" ? "<b>TMDB didn't accept your key.</b><p>Fix it with the gear button above.</p>" : netProblem(ex.error)}</div>`;
+    return;
+  }
+  const type = ex.type;
+  grid.innerHTML = `<div class="grid">${ex.items.map((it, i) => {
+    const title = it.title || it.name, date = it.release_date || it.first_air_date || "";
+    return `<div class="tile" data-i="${i}" role="button" tabindex="0" aria-label="${esc(title)}">
+      <div class="art">${it.poster_path ? `<img src="${IMG}w342${esc(it.poster_path)}" alt="" loading="lazy">` : `<span>${esc(title.charAt(0))}</span>`}
+        ${ex.sort === "popular" ? `<span class="rank">${i + 1}</span>` : ""}
+        ${starBtn(inLibrary(type, it), title, starring.has(type + "-" + it.id) ? "busy" : "")}</div>
+      <div class="tt">${esc(title)}</div><div class="ty">${esc(date.slice(0, 4))}${it.vote_average ? ` · ★ ${it.vote_average.toFixed(1)}` : ""}</div>
+    </div>`;
+  }).join("")}</div>
+  ${ex.loading ? `<div class="spinner"></div>` : ex.page < ex.pages && ex.items.length ? `<button class="btn ghost more" id="exMore">Show more</button>` : ""}
+  ${!ex.loading && !ex.items.length ? `<p class="empty">Nothing found for that filter.</p>` : ""}`;
+  grid.querySelectorAll("[data-i]").forEach(b => b.onclick = e => {
+    const it = ex.items[b.dataset.i];
+    if (e.target.closest("[data-star]")) return toggleStar(type, it);
+    openExploreItem(type, it.id);
+  });
+  const more = $("#exMore");
+  if (more) more.onclick = () => { ex.page++; loadExplore(false); };
+}
+async function openExploreItem(type, id) {
+  let content;
+  sheet(`<div class="content"><div class="spinner"></div></div>`, m => { content = m.querySelector(".content"); }, "Close");
+  const closeSheet = () => content.closest(".menu")?.remove();
+  const stored = type === "movie" ? (db.movies || {})[id] : null;
+  let d;
+  try {
+    d = await tmdbDetails(type, id);
+  } catch (e) {
+    if (!stored) { content.innerHTML = `<div class="err">${tmdbKey() ? netProblem(e) : "<b>Explore isn't set up.</b>"}</div>`; return; }
+    d = { title: stored.title, release_date: stored.year, overview: "", poster_path: null };
+  }
+  const title = d.title || d.name;
+  const year = (d.release_date || d.first_air_date || "").slice(0, 4);
+  const flat = ((d["watch/providers"] || {}).results || {})[region()]?.flatrate || [];
+  const facts = type === "tv"
+    ? [year, d.number_of_seasons && `${d.number_of_seasons} season${d.number_of_seasons === 1 ? "" : "s"}`, d.number_of_episodes && `${d.number_of_episodes} episodes`]
+    : [year, d.runtime && `${Math.floor(d.runtime / 60)}h ${d.runtime % 60}m`];
+  if (d.vote_average) facts.push(`★ ${d.vote_average.toFixed(1)}`);
+  const libShow = type === "tv" ? libraryEntry("tv", { id: Number(id), name: title, first_air_date: d.first_air_date || "" }) : null;
+  const show = libShow ? db.shows[libShow.id] : null;
+  const movie = type === "movie" ? (db.movies || {})[id] : null;
+  content.innerHTML = `
+    <div class="detail">
+      ${d.poster_path ? `<img class="poster" src="${IMG}w185${esc(d.poster_path)}" alt="">` : posterHtml(stored && stored.poster, title)}
+      <div><h3>${esc(title)}</h3><div class="sub">${facts.filter(Boolean).map(esc).join(" · ")}</div>
+        ${(d.genres || []).length ? `<div class="sub">${d.genres.slice(0, 3).map(g => esc(g.name)).join(", ")}</div>` : ""}</div>
+    </div>
+    ${flat.length ? `<div class="where"><span class="sub">Streaming on</span>${flat.slice(0, 5).map(p => `<span class="pv">${p.logo_path ? `<img onerror="this.remove()" src="${IMG}w92${esc(p.logo_path)}" alt="">` : ""}${esc(friendlyProvider(p.provider_name))}</span>`).join("")}</div>` : ""}
+    ${d.overview ? `<p class="overview">${esc(d.overview)}</p>` : ""}
+    <div id="itemErr"></div>
+    ${type === "tv"
+      ? show ? `<button class="btn" data-a="open">Open in My Shows</button>` : `<button class="btn" data-a="addtv">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add to My Shows</button>`
+      : movie ? `<button class="btn ghost" data-a="toggle">${movie.watched ? "Mark as not watched" : "Mark as watched"}</button><button class="btn danger" data-a="rmmovie">Remove from my movies</button>`
+              : `<button class="btn" data-a="addmovie">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add to my movies</button>`}`;
+  const btn = a => content.querySelector(`[data-a="${a}"]`);
+  btn("open") && (btn("open").onclick = () => { closeSheet(); go("/show/" + show.id); });
+  btn("toggle") && (btn("toggle").onclick = () => { movie.watched = !movie.watched; saveDb(); closeSheet(); render(); });
+  btn("rmmovie") && (btn("rmmovie").onclick = () => { closeSheet(); removeItem("movie", id); });
+  btn("addmovie") && (btn("addmovie").onclick = async () => {
+    await addFromTmdb("movie", id, d);
+    closeSheet(); refresh(); toast(`Added ${title} to your movies.`);
+  });
+  btn("addtv") && (btn("addtv").onclick = async () => {
+    const b = btn("addtv"); b.disabled = true; b.textContent = "Adding…";
+    try {
+      const added = await addFromTmdb("tv", id, d);
+      closeSheet(); go("/show/" + added.id);
+    } catch (e) {
+      b.disabled = false; b.innerHTML = "Add to My Shows";
+      content.querySelector("#itemErr").innerHTML = `<div class="err">${e.message === "notfound" ? "<b>Couldn't find this show's episode list.</b><p>Try adding it from the search on the My Shows tab.</p>" : netProblem(e)}</div>`;
+    }
+  });
+}
+async function toggleStar(type, it) {
+  const key = type + "-" + it.id;
+  if (starring.has(key)) return;
+  const entry = libraryEntry(type, it);
+  if (entry) return removeItem(entry.kind, entry.id);
+  const title = it.title || it.name;
+  starring.add(key); drawExploreGrid();
+  try {
+    await addFromTmdb(type, it.id);
+    toast(`Added ${title}.`);
+  } catch (e) {
+    toast(e.message === "notfound" ? `Couldn't find episode info for ${title}. Try Add show on My Shows.` : `Couldn't add ${title}. Check your connection.`);
+  }
+  starring.delete(key); drawExploreGrid();
+}
+// Episode tracking uses TVMaze; match the TMDB show to it.
+async function findOnTvMaze(d, title, year) {
+  const ext = d.external_ids || {};
+  for (const [k, v] of [["thetvdb", ext.tvdb_id], ["imdb", ext.imdb_id]]) {
+    if (!v) continue;
+    try { const s = await api(`/lookup/shows?${k}=${encodeURIComponent(v)}`); if (s && s.id) return s.id; }
+    catch (e) { if (e instanceof NetError) throw e; }
+  }
+  const res = await api(`/search/shows?q=${encodeURIComponent(title)}`);
+  const hit = res.find(r => (r.show.premiered || "").slice(0, 4) === year) || res[0];
+  return hit ? hit.show.id : null;
+}
+
+/* ---------- show detail ---------- */
+function renderShow(id) {
+  const show = db.shows[id];
+  show.watched = show.watched || {};
+  const st = stats(show);
+  const seasons = new Map();
+  for (const e of show.episodes) {
+    if (!seasons.has(e.s)) seasons.set(e.s, []);
+    seasons.get(e.s).push(e);
+  }
+  // default: open the season holding the next episode
+  if (!openSeasons[id]) openSeasons[id] = new Set([st.next ? st.next.s : st.upcoming ? st.upcoming.s : [...seasons.keys()].pop()]);
+  const open = openSeasons[id];
+
+  app.innerHTML = `
+    <header class="bar">
+      <button class="icon-btn" id="back" aria-label="Back">${ICON.back}</button>
+      <h1>${esc(show.name)}</h1>
+      <button class="icon-btn" id="more" aria-label="Show options">${ICON.more}</button>
+    </header>
+    <div class="hero">
+      ${posterHtml(show.image, show.name)}
+      <div class="info">
+        <div class="sub">${[show.year, show.status].filter(Boolean).map(esc).join(" · ")}</div>
+        <div class="field">
+          <label for="svc">Watching on</label>
+          <div class="svc-row"><span id="svcIco">${serviceIcon(show.service, 40)}</span>
+          <input id="svc" list="svcList" value="${esc(show.service || "")}" placeholder="e.g. Netflix"></div>
+          <datalist id="svcList">${knownServices().map(s => `<option value="${esc(s)}">`).join("")}</datalist>
+        </div>
+      </div>
+    </div>
+    <div class="stats" id="summary">${summaryHtml(show)}</div>
+    ${show.episodes.length ? "" : `<p class="empty">No episode info listed yet.</p>`}
+    <div id="seasons">${[...seasons.entries()].map(([n, eps]) => seasonHtml(show, n, eps, open.has(n))).join("")}</div>
+    <div class="bottom-actions">
+      <button class="btn" id="addAnother">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add another show</button>
+      <button class="btn ghost" id="viewAll">View all shows</button>
+    </div>
+  `;
+  $("#addAnother").onclick = () => go("/add");
+  $("#viewAll").onclick = () => go("/");
+  $("#back").onclick = () => go("/");
+  $("#more").onclick = () => showMenu(id);
+  const svc = $("#svc");
+  svc.onchange = svc.onblur = () => {
+    const v = svc.value.trim();
+    if (v !== (show.service || "")) { show.service = v; saveDb(); }
+    $("#svcIco").innerHTML = serviceIcon(v, 40);
+  };
+  bindSeasons(id);
+
+  refreshShow(id).then(changed => { if (changed && location.hash === "#/show/" + id) renderShow(id); }).catch(() => {});
+}
+function summaryHtml(show) {
+  const w = show.watched || {};
+  const reg = regularEps(show);
+  const bySeason = new Map();
+  for (const e of reg) { if (!bySeason.has(e.s)) bySeason.set(e.s, []); bySeason.get(e.s).push(e); }
+  const seasonsDone = [...bySeason.values()].filter(eps => eps.every(e => w[e.id])).length;
+  const watched = reg.filter(e => w[e.id]).length;
+  const airedLeft = reg.filter(e => aired(e) && !w[e.id]).length;
+  const notOut = reg.filter(e => !aired(e)).length;
+  const tile = (big, label, sub) => `<div class="stat"><div class="big">${big}</div><div class="lbl">${label}</div><div class="sm">${sub}</div></div>`;
+  return tile(bySeason.size, bySeason.size === 1 ? "Season" : "Seasons", `${seasonsDone} finished`)
+       + tile(reg.length, reg.length === 1 ? "Episode" : "Episodes", `${watched} watched`)
+       + tile(airedLeft, "Left to watch", notOut ? `+${notOut} not out yet` : "all are out");
+}
+function knownServices() {
+  const base = ["Netflix", "Hulu", "Max", "Disney+", "Prime Video", "Apple TV+", "Peacock", "Paramount+", "YouTube TV", "Cable / Live TV"];
+  const mine = Object.values(db.shows).map(s => s.service).filter(Boolean);
+  return [...new Set([...mine, ...base])];
+}
+function seasonHtml(show, n, eps, isOpen) {
+  const w = show.watched;
+  const airedEps = eps.filter(e => !e.special && aired(e));
+  const seen = eps.filter(e => !e.special && w[e.id]).length;
+  const done = airedEps.length > 0 && airedEps.every(e => w[e.id]);
+  return `<div class="season ${isOpen ? "open" : ""}" data-season="${n}">
+    <button class="season-head">${ICON.chev}<span class="t">Season ${n}</span>
+      <span class="sub">${done ? `<span style="color:var(--good)">✓ ${seen}/${airedEps.length}</span>` : `${seen}/${airedEps.length}`}</span></button>
+    <div class="eps">
+      ${airedEps.length ? `<div class="season-tools">
+        ${done ? `<button class="btn ghost small" data-season-act="unwatch">Unmark season</button>`
+               : `<button class="btn ghost small" data-season-act="watch">Mark season watched</button>`}
+      </div>` : ""}
+      ${eps.map(e => {
+        const fut = !aired(e);
+        return `<div class="ep ${w[e.id] ? "seen" : ""} ${fut ? "future" : ""}" data-ep="${e.id}">
+          <div class="num">${e.n == null ? "SP" : "E" + e.n}</div>
+          <div class="body"><div class="title">${esc(e.name)}</div><div class="date">${fut ? "Airs " : ""}${esc(fmtDate(e.date))}</div></div>
+          <button class="check" aria-label="Watched">${ICON.check}</button>
+        </div>`;
+      }).join("")}
+    </div>
+  </div>`;
+}
+function bindSeasons(id) {
+  const show = db.shows[id];
+  const root = $("#seasons");
+  root.querySelectorAll(".season").forEach(sec => {
+    const n = Number(sec.dataset.season);
+    sec.querySelector(".season-head").onclick = () => {
+      sec.classList.toggle("open");
+      sec.classList.contains("open") ? openSeasons[id].add(n) : openSeasons[id].delete(n);
+    };
+    sec.querySelectorAll("[data-season-act]").forEach(b => b.onclick = () => {
+      const eps = show.episodes.filter(e => e.s === n && !e.special && aired(e));
+      if (b.dataset.seasonAct === "watch") eps.forEach(e => show.watched[e.id] = Date.now());
+      else eps.forEach(e => delete show.watched[e.id]);
+      show.lastWatchedAt = Date.now();
+      saveDb(); redrawSeasons(id);
+    });
+  });
+  root.querySelectorAll(".ep .check").forEach(c => c.onclick = () => toggleEp(id, Number(c.closest(".ep").dataset.ep)));
+}
+function redrawSeasons(id) {
+  const show = db.shows[id];
+  const y = window.scrollY;
+  const seasons = new Map();
+  for (const e of show.episodes) { if (!seasons.has(e.s)) seasons.set(e.s, []); seasons.get(e.s).push(e); }
+  $("#seasons").innerHTML = [...seasons.entries()].map(([n, eps]) => seasonHtml(show, n, eps, openSeasons[id].has(n))).join("");
+  const st = stats(show);
+  $("#summary").innerHTML = summaryHtml(show);
+  bindSeasons(id);
+  window.scrollTo(0, y);
+}
+function toggleEp(id, epId) {
+  const show = db.shows[id];
+  const w = show.watched;
+  if (w[epId]) { delete w[epId]; saveDb(); redrawSeasons(id); return; }
+  w[epId] = Date.now();
+  show.lastWatchedAt = Date.now();
+  saveDb(); redrawSeasons(id);
+  // offer to fill in earlier unwatched episodes
+  const idx = show.episodes.findIndex(e => e.id === epId);
+  const earlier = show.episodes.slice(0, idx).filter(e => !e.special && aired(e) && !w[e.id]);
+  if (earlier.length) {
+    toast(`Also mark the ${earlier.length} earlier episode${earlier.length === 1 ? "" : "s"} as watched?`, "Mark them", () => {
+      earlier.forEach(e => w[e.id] = Date.now());
+      saveDb(); redrawSeasons(id);
+    });
+  }
+}
+function showMenu(id) {
+  const show = db.shows[id];
+  sheet(`
+    <h3>${esc(show.name)}</h3>
+    <button class="btn ghost" data-a="refresh">Check for new episodes</button>
+    <button class="btn danger" data-a="remove">Remove show</button>
+  `, (m, close) => {
+    m.querySelector('[data-a="refresh"]').onclick = async e => {
+      e.target.textContent = "Checking…";
+      try { await refreshShow(id, true); close(); renderShow(id); toast("Episode list updated."); }
+      catch { close(); toast("Couldn't reach TVMaze. Try again later."); }
+    };
+    m.querySelector('[data-a="remove"]').onclick = () => {
+      close();
+      go("/");
+      removeItem("show", id);
+    };
+  });
+}
+
+render();
+})();
+</script>
+</body>
+</html>
