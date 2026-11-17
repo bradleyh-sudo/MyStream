@@ -228,6 +228,39 @@ a{color:var(--accent)}
 .btn.google{background:var(--surface);color:var(--text);border:1px solid var(--line);height:46px;gap:10px}
 .or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}
 .or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
+.listsw{display:flex;align-items:center;gap:8px;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:8px 12px;margin:0 0 12px;text-align:left;box-shadow:var(--shadow)}
+.listsw svg{width:20px;height:20px;flex:none;color:var(--accent)}
+.listsw .ln{font-weight:700}
+.listsw .lsub{flex:1;min-width:0;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.listsw .dd{margin-left:auto;color:var(--muted)}
+.lrow{display:flex;align-items:center;border-bottom:1px solid var(--line)}
+.lrow:last-child{border-bottom:0}
+.lpick{flex:1;min-width:0;display:flex;align-items:center;gap:12px;padding:10px 14px;text-align:left}
+.lpick svg{width:22px;height:22px;flex:none;color:var(--accent)}
+.lt{flex:1;min-width:0;display:flex;flex-direction:column}
+.lt .ln{font-weight:650}
+.lt .lsub{font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lcheck{color:var(--accent);font-weight:800}
+.lmanage{font-size:14px;font-weight:600;color:var(--accent);padding:0 14px;height:44px}
+.lcrow{display:flex;align-items:center;gap:12px;width:100%;padding:0 14px;min-height:52px;border-bottom:1px solid var(--line);text-align:left;font-size:16px}
+.lcrow:last-child{border-bottom:0}
+.lcrow svg{width:22px;height:22px;color:var(--accent)}
+.lcrow .ln{flex:1;font-weight:600}
+.lcrow .lcst{font-size:14px;font-weight:700;padding:5px 12px;border-radius:999px;background:var(--accent);color:var(--accent-ink)}
+.lcrow.on .lcst{background:color-mix(in srgb,var(--good) 18%,transparent);color:var(--good)}
+.linkbox{width:100%;height:42px;border-radius:10px;border:1px solid var(--line);background:var(--surface2);padding:0 12px;font-size:14px;color:var(--text)}
+.members{display:flex;flex-direction:column;gap:6px;font-size:15px}
+.members div{display:flex;align-items:center;gap:8px}
+.joinbox{display:flex;flex-direction:column;gap:12px;margin-top:6px}
+.joinbox p{margin:0}
+.markall{width:100%;margin:0 0 12px;height:44px}
+.markall[hidden]{display:none}
+.line-acts{display:flex;align-items:center;align-self:flex-start;gap:0}
+.lists-btn{position:relative;flex:none;width:36px;height:36px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted)}
+.lists-btn svg{width:21px;height:21px}
+.lists-btn.sm{width:30px;height:30px}
+.lists-btn.sm svg{width:17px;height:17px}
+.lists-btn .lb{position:absolute;right:1px;top:1px;min-width:15px;height:15px;border-radius:999px;background:var(--accent);color:var(--accent-ink);font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;padding:0 3px}
 .count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;align-self:flex-start;padding-top:2px}
 .empty{text-align:center;color:var(--muted);padding:56px 16px}
 .empty h2{color:var(--text);font-size:20px;margin-bottom:6px}
@@ -298,11 +331,41 @@ a{color:var(--accent)}
 /* ---------- storage ---------- */
 const KEY = "myshows-v1";
 const STALE_MS = 12 * 60 * 60 * 1000; // refresh episode lists twice a day at most
-let db = loadDb();
+let db = wireDb(loadDb());
 function loadDb() {
-  try { const v = JSON.parse(localStorage.getItem(KEY)); if (v && v.shows) return v; } catch {}
-  return { shows: {} };
+  try { const v = JSON.parse(localStorage.getItem(KEY)); if (v && (v.shows || v.lists)) return v; } catch {}
+  return {};
 }
+// Lists: db.lists.me is your own list; any other key is a shared list (its database id).
+// db.shows / db.movies / db.favCategories always point at the list you're looking at (db.active).
+function wireDb(d) {
+  d = d || {};
+  if (!d.lists) {   // older single-list format -> "My list"
+    d.lists = { me: { shows: d.shows || {}, movies: d.movies || {} } };
+    if (d.favCategories) d.lists.me.favCategories = d.favCategories;
+    d.sync = { me: { sig: d.dirty ? "" : null, dirty: !!d.dirty } };   // null = assume in sync
+    delete d.shows; delete d.movies; delete d.favCategories; delete d.syncedSig; delete d.dirty;
+  }
+  d.sync = d.sync || {};
+  d.lists.me = d.lists.me || {};
+  for (const L of Object.values(d.lists)) { L.shows = L.shows || {}; L.movies = L.movies || {}; normalizeListServices(L); }
+  if (!d.lists[d.active]) d.active = "me";
+  for (const k of ["shows", "movies", "favCategories"])
+    Object.defineProperty(d, k, { configurable: true, enumerable: false,
+      get() { return d.lists[d.active][k]; }, set(v) { d.lists[d.active][k] = v; } });
+  return d;
+}
+// Run fn with another list temporarily active (screens redraw once afterwards).
+let listOverride = 0, refreshPending = false;
+function withList(key, fn) {
+  if (!key || key === db.active || !db.lists[key]) return fn();
+  const prev = db.active; db.active = key; listOverride++;
+  try { return fn(); }
+  finally { db.active = prev; listOverride--; if (!listOverride && refreshPending) { refreshPending = false; refresh(); } }
+}
+const listKeys = () => ["me", ...Object.keys(db.lists).filter(k => k !== "me").sort((a, b) => listName(a).localeCompare(listName(b)))];
+const multiList = () => Object.keys(db.lists).length > 1;
+const listName = k => k === "me" ? "My list" : (db.lists[k] && db.lists[k].name) || "Shared list";
 function writeLocal() {
   try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { toast("Couldn't save — storage is full or blocked."); }
 }
@@ -328,7 +391,19 @@ async function api(path, tries = 0) {
   if (!r.ok) throw new Error("TVMaze returned " + r.status);
   return r.json();
 }
-const serviceOf = s => (s.webChannel && s.webChannel.name) || (s.network && s.network.name) || "";
+const serviceOf = s => normalizeService((s.webChannel && s.webChannel.name) || (s.network && s.network.name) || "");
+// One name per service: every HBO/Max variant is "HBO Max"; drop "Amazon Channel" / "with Ads" variants.
+function normalizeService(name) {
+  if (!name) return name || "";
+  const n = String(name).trim().replace(/\s+(Amazon|Apple TV|Roku Premium) Channel$/i, "").replace(/\s+(Standard |Basic )?with Ads$/i, "");
+  return /^(hbo\b.*|max)$/i.test(n) ? "HBO Max" : n;
+}
+function normalizeListServices(L) {
+  for (const x of [...Object.values(L.shows || {}), ...Object.values(L.movies || {})]) {
+    if (x.service) x.service = normalizeService(x.service);
+    if (x.defaultService) x.defaultService = normalizeService(x.defaultService);
+  }
+}
 function slimEpisodes(list) {
   return (list || []).map(e => ({
     id: e.id, s: e.season, n: e.number, name: e.name || "TBA",
@@ -393,6 +468,8 @@ const ICON = {
   back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
   more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  person: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>',
+  people: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17" cy="9" r="2.8"/><path d="M16.5 14.2c3 .2 5 2.4 5 5.3"/></svg>',
   heart: '<svg viewBox="0 0 24 24" stroke-width="2" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.2-9.4C1.6 7.6 3.9 4.5 7.2 4.5c2 0 3.6 1.1 4.8 2.9 1.2-1.8 2.8-2.9 4.8-2.9 3.3 0 5.6 3.1 4.4 6.6-1.7 4.8-9.2 9.4-9.2 9.4z"/></svg>',
   dice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2" fill="currentColor"/><circle cx="15" cy="15" r="1.2" fill="currentColor"/><circle cx="15" cy="9" r="1.2" fill="currentColor"/><circle cx="9" cy="15" r="1.2" fill="currentColor"/></svg>',
   star: '<svg viewBox="0 0 24 24" stroke-width="2" stroke-linejoin="round"><path d="M12 3.3l2.7 5.5 6 .9-4.35 4.2 1.03 6L12 17.05 6.62 19.9l1.03-6L3.3 9.7l6-.9z"/></svg>',
@@ -420,6 +497,29 @@ function serviceIcon(name, size = 22) {
   return `<span class="svc-ico" aria-hidden="true" style="width:${size}px;height:${size}px;background:${bg};color:${fg};font-size:${fs}px">${esc(label)}</span>`;
 }
 
+// Which lists is this on? Shown on each line of Watching when you have more than one list.
+function listsBtn(kind, id, label, extra = "") {
+  if (!multiList()) return "";
+  const n = listKeys().filter(k => isListed((db.lists[k][kind === "show" ? "shows" : "movies"] || {})[id])).length;
+  return `<button class="lists-btn ${extra}" data-lists aria-label="Lists for ${esc(label)}">${ICON.people}${n > 1 ? `<span class="lb">${n}</span>` : ""}</button>`;
+}
+// Put a show/movie from the current list onto another list too (copies its progress).
+function copyToList(kind, id, key) {
+  const src = storeOf(kind)[id]; if (!src) return;
+  const copy = JSON.parse(JSON.stringify(src));
+  withList(key, () => {
+    const store = storeOf(kind), cur = store[id];
+    if (cur) cur.listed = true;
+    else store[id] = { ...copy, listed: true, fav: false, favCats: [] };
+    saveDb();
+  });
+}
+function openLineLists(kind, id) {
+  const it = storeOf(kind)[id]; if (!it) return;
+  openListChooser({ name: it.name || it.title, which: "listed",
+    find: () => storeOf(kind)[id] ? { kind, id: Number(id) } : null,
+    add: async k => copyToList(kind, id, k) });
+}
 function starBtn(on, label, extra = "") {
   return `<button class="star ${on ? "on" : ""} ${extra}" data-star aria-pressed="${on}" aria-label="${on ? "Remove " + esc(label) + " from Watching" : "Add " + esc(label) + " to Watching"}">${ICON.star}</button>`;
 }
@@ -462,6 +562,7 @@ function setFav(kind, id, on) {
   toast(`${name} removed from Favorites.`, "Undo", () => { store[id] = it; it.fav = true; saveDb(); refresh(); });
 }
 function refresh() {
+  if (listOverride) { refreshPending = true; return; }
   const h = location.hash.replace(/^#\/?/, "");
   if (h === "explore") drawExploreGrid();
   else if (h === "favorites") renderFavorites();
@@ -516,12 +617,13 @@ function render() {
   if (h !== currentRoute) { prevRoute = currentRoute; currentRoute = h; }
   window.scrollTo(0, 0);
   const showMatch = h.match(/^show\/(\d+)$/);
-  const tab = h === "explore" || h === "favorites" ? h : h === "add" || showMatch ? null : "home";
+  const tab = h === "explore" || h === "favorites" ? h : h === "add" || showMatch || h.startsWith("join/") ? null : "home";
   $("#tabs").hidden = !tab;
   document.body.classList.toggle("has-tabs", !!tab);
   $("#tabs").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
   if (h === "add") return renderAdd();
   if (h === "explore") return renderExplore();
+  if (h.startsWith("join/")) { const [id, q] = h.slice(5).split("?"); return renderJoin(id, new URLSearchParams(q || "").get("n") || "a shared list"); }
   if (h === "favorites") return renderFavorites();
   const m = h.match(/^show\/(\d+)$/);
   if (m && db.shows[m[1]]) return renderShow(m[1]);
@@ -567,6 +669,7 @@ function renderHome() {
       <button class="icon-btn" id="menuBtn" aria-label="Menu">${ICON.more}</button>
       <button class="btn" id="addBtn">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add show</button>
     </header>
+    ${listSwitcherHtml()}
     ${account.enabled && account.ready && !account.user && !settings().hideAcctBanner ? `<div class="banner">
         <span>Save your list to a free account so it's safe and on all your devices.</span>
         <button class="btn small" id="bannerGo">Sign up</button><button class="x" id="bannerX" aria-label="Dismiss">✕</button></div>` : ""}
@@ -576,8 +679,8 @@ function renderHome() {
         ${viewToggle}
       </div>
       ${section("In progress", "", watching)}
-      ${section("Caught up", "", caught)}
       ${section("Haven't started", "Saved for later. Check off an episode and it moves up to In progress.", notStarted)}
+      ${section("Caught up", "", caught)}
       ${otherMovies.length ? `<div class="section-label">Movies <span class="n">${otherMovies.filter(m => !m.watched).length || "all watched"}</span></div>${textView ? `<div class="rows">${otherMovies.map(movieRowHtml).join("")}</div>` : `<div class="list">${otherMovies.map(movieCardHtml).join("")}</div>`}` : ""}
     ` : `
       <div class="empty">
@@ -588,6 +691,7 @@ function renderHome() {
       </div>`}
   `;
   $("#addBtn").onclick = () => go("/add");
+  bindListSwitcher();
   $("#addBtn2") && ($("#addBtn2").onclick = () => go("/add"));
   $("#menuBtn").onclick = openMainMenu;
   if ($("#bannerGo")) {
@@ -597,11 +701,13 @@ function renderHome() {
   app.querySelectorAll(".chip").forEach(c => c.onclick = () => { filter = c.dataset.f; renderHome(); });
   app.querySelectorAll("[data-view]").forEach(b => b.onclick = () => { settings().view = b.dataset.view; saveDb(); renderHome(); });
   app.querySelectorAll("[data-show]").forEach(c => c.onclick = e => {
+    if (e.target.closest("[data-lists]")) return openLineLists("show", c.dataset.show);
     if (e.target.closest("[data-star]")) return removeItem("show", c.dataset.show);
     go("/show/" + c.dataset.show);
   });
   app.querySelectorAll("[data-movie]").forEach(c => c.onclick = e => {
     const id = c.dataset.movie;
+    if (e.target.closest("[data-lists]")) return openLineLists("movie", id);
     if (e.target.closest("[data-star]")) return removeItem("movie", id);
     if (e.target.closest(".check")) { db.movies[id].watched = !db.movies[id].watched; saveDb(); renderHome(); return; }
     openExploreItem("movie", id);
@@ -641,7 +747,7 @@ function cardHtml({ s, st }) {
       ${air}
       ${started ? `<div class="progress"><i style="width:${pct}%"></i></div>` : ""}
     </div>
-    ${starBtn(true, s.name)}
+    <div class="line-acts">${listsBtn("show", s.id, s.name)}${starBtn(true, s.name)}</div>
   </div>`;
 }
 // "Pick one for me": a random episode of a favorite show (or a favorite movie).
@@ -691,6 +797,7 @@ function openMainMenu() {
     <h3>Account</h3>
     ${!account.enabled ? `<p>Accounts aren't switched on for this copy of the app yet.</p>`
       : u ? `<p>Signed in as <b>${esc(u.email)}</b>.<br><span id="syncLine">${esc(syncStatusText())}</span></p>
+             <button class="btn ghost" data-a="lists">${ICON.people.replace("<svg", '<svg width="18" height="18"')} Lists &amp; sharing</button>
              <button class="btn ghost" data-a="signout">Sign out</button>`
           : `<p>Create a free account to save your shows and movies, and see them on any phone or computer.</p>
              <button class="btn" data-a="register">Create account</button>
@@ -706,6 +813,7 @@ function openMainMenu() {
     on("register", () => { close(); openAccountSheet("register"); });
     on("signin", () => { close(); openAccountSheet("signin"); });
     on("signout", () => { close(); confirmSignOut(); });
+    on("lists", () => { close(); openListsSheet(); });
   });
 }
 function exportBackup() {
@@ -721,10 +829,13 @@ $("#importFile").onchange = async e => {
   if (!f) return;
   try {
     const data = JSON.parse(await f.text());
-    if (!data || typeof data.shows !== "object") throw 0;
-    const n = Object.keys(data.shows).length;
-    if (!confirm(`Replace your current list with ${n} show${n === 1 ? "" : "s"} from this backup?`)) return;
-    db = { ...data, linkedUid: db.linkedUid, deviceId: db.deviceId, dirty: false }; saveDb(); render(); toast("Backup restored.");
+    if (!data || (typeof data.shows !== "object" && typeof data.lists !== "object")) throw 0;
+    const imported = wireDb(data);
+    const n = Object.keys(imported.lists.me.shows).length;
+    if (!confirm(`Replace My list with ${n} show${n === 1 ? "" : "s"} from this backup? Shared lists aren't changed.`)) return;
+    db.lists.me = imported.lists.me;
+    db.settings = { ...(imported.settings || {}), ...(db.settings || {}) };
+    db.active = "me"; saveDb(); render(); toast("Backup restored.");
   } catch { toast("That file isn't a My Shows backup."); }
 };
 
@@ -812,18 +923,45 @@ function drawResults(list) {
 // Add/remove/favorite a TVMaze show without leaving the page.
 const adding = new Set();
 // opts: { listed: put on Watching, fav: put in Favorites }
-async function addTvMaze(id, opts = {}) {
+async function addTvMaze(id, opts = {}, listKey) {
   id = Number(id);
-  const cur = db.shows[id];
+  const cur = withList(listKey, () => db.shows[id]);
   if (cur) { if (opts.fav) cur.fav = true; if (opts.listed) cur.listed = true; saveDb(); return cur; }
   const data = previewCache[id] || await fetchShow(id);
-  db.shows[id] = { id, service: data.defaultService, watched: {}, addedAt: Date.now(), ...data, fav: !!opts.fav, listed: !!opts.listed };
-  saveDb();
-  return db.shows[id];
+  return withList(listKey, () => {
+    db.shows[id] = { id, service: data.defaultService, watched: {}, addedAt: Date.now(), ...JSON.parse(JSON.stringify(data)), fav: !!opts.fav, listed: !!opts.listed };
+    saveDb();
+    return db.shows[id];
+  });
+}
+const showNameFor = id => ((lastResults || []).find(s => s.id == id) || db.shows[id] || previewCache[id] || {}).name || "This show";
+// Star/heart when you have more than one list: ask which list(s).
+// which: "listed" (Watching) or "fav" (Favorites); find(): {kind,id} in the current list or null; add(key): add it to that list.
+function openListChooser({ name, which, find, add }) {
+  sheet(`<h3>${which === "fav" ? "Add to Favorites on…" : "Add to Watching on…"}</h3><p>${esc(name)}</p><div class="catlist" id="lcRows"></div>`, m => {
+    const state = k => withList(k, () => { const e = find(); const it = e && storeOf(e.kind)[e.id]; return { e, on: which === "fav" ? !!(it && it.fav) : isListed(it) }; });
+    const draw = () => {
+      m.querySelector("#lcRows").innerHTML = listKeys().map(k => { const { on } = state(k); return `
+        <button class="lcrow ${on ? "on" : ""}" data-k="${esc(k)}">${k === "me" ? ICON.person : ICON.people}<span class="ln">${esc(listName(k))}</span>
+          <span class="lcst">${on ? (which === "fav" ? "♥ Added" : "★ Added") : "Add"}</span></button>`; }).join("");
+      m.querySelectorAll("[data-k]").forEach(b => b.onclick = async () => {
+        const k = b.dataset.k, { e, on } = state(k);
+        b.disabled = true; b.querySelector(".lcst").textContent = "…";
+        try {
+          if (on) withList(k, () => which === "fav" ? setFav(e.kind, e.id, false) : removeItem(e.kind, e.id));
+          else if (e) withList(k, () => which === "fav" ? setFav(e.kind, e.id, true) : addToWatching(e.kind, e.id));
+          else await add(k);
+        } catch (err) { toast(err && err.message === "notfound" ? `Couldn't find episode info for ${name}.` : "Couldn't add it. Check your connection."); }
+        draw(); refresh();
+      });
+    };
+    draw();
+  }, "Done");
 }
 async function toggleShowInList(id) {
   id = Number(id);
   if (adding.has(id)) return;
+  if (multiList()) return openListChooser({ name: showNameFor(id), which: "listed", find: () => db.shows[id] ? { kind: "show", id } : null, add: k => addTvMaze(id, { listed: true }, k) });
   if (isListed(db.shows[id])) return removeItem("show", id);
   if (db.shows[id]) return addToWatching("show", id);
   adding.add(id); refresh();
@@ -834,12 +972,161 @@ async function toggleShowInList(id) {
 async function toggleShowFav(id) {
   id = Number(id);
   if (adding.has(id)) return;
+  if (multiList()) return openListChooser({ name: showNameFor(id), which: "fav", find: () => db.shows[id] ? { kind: "show", id } : null, add: k => addTvMaze(id, { fav: true }, k) });
   const s = db.shows[id];
   if (s) return setFav("show", id, !s.fav);
   adding.add(id); refresh();
   try { await addTvMaze(id, { fav: true }); favToast("show", id); }
   catch { toast("Couldn't add that show. Check your connection."); }
   adding.delete(id); refresh();
+}
+
+/* ---------- lists: switcher, shared lists, invites ---------- */
+const myName = () => (account.user && (account.user.name || account.user.email)) || "Someone";
+function memberSummary(k) {
+  const L = db.lists[k], me = account.user && account.user.uid;
+  const others = (L.members || []).filter(u => u !== me).map(u => ((L.memberNames || {})[u] || "Someone").split("@")[0]);
+  return others.length ? "You and " + others.join(", ") : "Just you so far. Invite someone";
+}
+function listSwitcherHtml() {
+  if (!account.user && !multiList()) return "";
+  const k = db.active;
+  return `<button class="listsw" id="listSw" aria-label="Switch list">${k === "me" ? ICON.person : ICON.people}<span class="ln">${esc(listName(k))}</span>
+    ${k !== "me" ? `<span class="lsub">${esc(memberSummary(k))}</span>` : ""}<svg class="dd" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button>`;
+}
+function bindListSwitcher() { const b = $("#listSw"); if (b) b.onclick = openListsSheet; }
+function switchList(k) {
+  if (!db.lists[k]) return;
+  db.active = k; filter = "All"; favFilter = "All"; writeLocal();
+  refresh(); backgroundRefresh();
+}
+function openListsSheet() {
+  sheet(`
+    <h3>Your lists</h3>
+    <p>Each list has its own shows, favorites, and checkmarks.</p>
+    <div class="catlist">${listKeys().map(k => `
+      <div class="lrow ${k === db.active ? "on" : ""}">
+        <button class="lpick" data-k="${esc(k)}">${k === "me" ? ICON.person : ICON.people}
+          <span class="lt"><span class="ln">${esc(listName(k))}</span><span class="lsub">${k === "me" ? "Only you" : esc(memberSummary(k))}</span></span>
+          ${k === db.active ? `<span class="lcheck">✓</span>` : ""}</button>
+        ${k !== "me" ? `<button class="lmanage" data-m="${esc(k)}">Manage</button>` : ""}
+      </div>`).join("")}</div>
+    ${account.user ? `<button class="btn" data-a="new">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} New shared list</button>`
+      : `<p>Sign in to make a list you share with someone.</p><button class="btn" data-a="signin">Sign in</button>`}
+  `, (m, close) => {
+    m.querySelectorAll("[data-k]").forEach(b => b.onclick = () => { close(); switchList(b.dataset.k); });
+    m.querySelectorAll("[data-m]").forEach(b => b.onclick = () => { close(); openManageList(b.dataset.m); });
+    const nb = m.querySelector('[data-a="new"]'); if (nb) nb.onclick = () => { close(); openNewList(); };
+    const sb = m.querySelector('[data-a="signin"]'); if (sb) sb.onclick = () => { close(); openAccountSheet("signin"); };
+  }, "Close");
+}
+function openNewList() {
+  sheet(`
+    <h3>New shared list</h3>
+    <p>Name it, then send the invite link to the person you're sharing with.</p>
+    <form class="search" id="nlForm" style="margin:0"><input id="nlName" value="Us" maxlength="40" autocomplete="off"><button class="btn" type="submit">Create</button></form>
+    <div id="nlErr" class="err" hidden></div>
+  `, (m, close) => {
+    const inp = m.querySelector("#nlName"); setTimeout(() => { inp.focus(); inp.select(); }, 50);
+    m.querySelector("#nlForm").onsubmit = async e => {
+      e.preventDefault();
+      const name = inp.value.trim() || "Us";
+      const btn = m.querySelector('#nlForm button'); btn.disabled = true; btn.textContent = "Creating…";
+      try {
+        const uid = account.user.uid;
+        const data = { name, owner: uid, members: [uid], memberNames: { [uid]: myName() }, shows: {}, movies: {},
+                       favCategories: DEFAULT_CATS.slice(), createdAt: Date.now(), updatedAt: Date.now() };
+        const id = await backend.createList(data);
+        applyListData(id, data);
+        db.active = id; filter = "All"; favFilter = "All"; writeLocal();
+        close(); refresh(); openInvite(id, true);
+      } catch (err) {
+        btn.disabled = false; btn.textContent = "Create";
+        const el = m.querySelector("#nlErr"); el.hidden = false;
+        el.textContent = err && err.code === "permission-denied" ? "Your Firebase database rules need the shared-lists update first." : "Couldn't create the list. Check your connection.";
+      }
+    };
+  });
+}
+const inviteLink = k => `${location.origin}${location.pathname}#/join/${k}?n=${encodeURIComponent(listName(k))}`;
+function openInvite(k, fresh) {
+  const url = inviteLink(k);
+  sheet(`
+    <h3>${fresh ? `"${esc(listName(k))}" is ready` : `Invite to "${esc(listName(k))}"`}</h3>
+    <p>Send this link to your partner. When they open it and sign in, they'll join this list. Anyone with the link can join, so only share it with people you want on the list.</p>
+    <input class="linkbox" id="invUrl" readonly value="${esc(url)}">
+    ${navigator.share ? `<button class="btn" data-a="share">Share link…</button>` : ""}
+    <button class="btn ${navigator.share ? "ghost" : ""}" data-a="copy">Copy link</button>
+  `, m => {
+    const box = m.querySelector("#invUrl"); box.onclick = () => box.select();
+    const sh = m.querySelector('[data-a="share"]');
+    if (sh) sh.onclick = () => navigator.share({ title: "Join my MyStream list", text: `Join "${listName(k)}" on MyStream`, url }).catch(() => {});
+    m.querySelector('[data-a="copy"]').onclick = async () => {
+      try { await navigator.clipboard.writeText(url); toast("Invite link copied."); }
+      catch { box.select(); toast("Select the link above and copy it."); }
+    };
+  }, "Done");
+}
+function openManageList(k) {
+  const L = db.lists[k]; if (!L) return;
+  const me = account.user && account.user.uid;
+  const onlyMe = (L.members || []).filter(u => u !== me).length === 0;
+  sheet(`
+    <h3>Manage "${esc(listName(k))}"</h3>
+    <div class="field"><label for="mlName">List name</label>
+      <div class="svc-other" style="margin:0"><input id="mlName" value="${esc(L.name || "")}" maxlength="40"><button class="btn small" id="mlSave">Save</button></div></div>
+    <div class="field"><label>People</label>
+      <div class="members">${(L.members || []).map(u => `<div>${ICON.person.replace("<svg", '<svg width="16" height="16"')} ${esc((L.memberNames || {})[u] || "Someone")}${u === me ? " (you)" : ""}</div>`).join("")}</div></div>
+    <button class="btn" data-a="invite">Invite someone</button>
+    <button class="btn danger" data-a="leave">${onlyMe ? "Delete this list" : "Leave this list"}</button>
+  `, (m, close) => {
+    m.querySelector("#mlSave").onclick = () => {
+      const v = m.querySelector("#mlName").value.trim(); if (!v) return;
+      L.name = v; saveDb(); refresh(); close(); toast("List renamed.");
+    };
+    m.querySelector('[data-a="invite"]').onclick = () => { close(); openInvite(k); };
+    m.querySelector('[data-a="leave"]').onclick = async () => {
+      if (!confirm(onlyMe ? `Delete "${listName(k)}" and everything on it?` : `Leave "${listName(k)}"? It stays for the others, and you can rejoin with an invite link.`)) return;
+      close();
+      try {
+        if (onlyMe) await backend.deleteList(k); else await backend.leaveList(k, me);
+        const name = listName(k);
+        delete db.lists[k]; delete db.sync[k]; clearTimeout(pushTimers[k]); delete pushTimers[k];
+        if (db.active === k) db.active = "me";
+        writeLocal(); refresh(); toast(onlyMe ? `Deleted "${name}".` : `You left "${name}".`);
+      } catch { toast("Couldn't do that right now. Check your connection."); }
+    };
+  }, "Close");
+}
+function renderJoin(id, name) {
+  const L = db.lists[id];
+  let body;
+  if (!account.enabled) body = `<p>Accounts aren't switched on for this copy of the app.</p>`;
+  else if (!account.ready) body = `<div class="spinner"></div>`;
+  else if (L) body = `<p>You're already in <b>${esc(listName(id))}</b>.</p><button class="btn" id="jOpen">Open it</button>`;
+  else if (!account.user) body = `<p>You've been invited to <b>${esc(name)}</b>, a shared list on MyStream.</p>
+      <p class="sub">Create a free account (or sign in) to join. Your own list stays private.</p>
+      <button class="btn" id="jReg">Create account</button><button class="btn ghost" id="jIn">Sign in</button>`;
+  else body = `<p>Join <b>${esc(name)}</b>?</p>
+      <p class="sub">You'll share its shows, favorites, and episode checkmarks with the others on it. Your own list stays private.</p>
+      <div id="jErr" class="err" hidden></div>
+      <button class="btn" id="jJoin">${ICON.people.replace("<svg", '<svg width="18" height="18"')} Join list</button>`;
+  app.innerHTML = `<header class="bar"><button class="icon-btn" id="back" aria-label="Back">${ICON.back}</button><h1>Shared list</h1></header>
+    <div class="setup joinbox">${body}</div>`;
+  $("#back").onclick = () => go("/");
+  $("#jOpen") && ($("#jOpen").onclick = () => { switchList(id); go("/"); });
+  $("#jReg") && ($("#jReg").onclick = () => openAccountSheet("register"));
+  $("#jIn") && ($("#jIn").onclick = () => openAccountSheet("signin"));
+  $("#jJoin") && ($("#jJoin").onclick = async () => {
+    const b = $("#jJoin"); b.disabled = true; b.lastChild.textContent = " Joining…";
+    pendingActivate = id;
+    try { await backend.joinList(id, account.user.uid, myName()); }
+    catch (e) {
+      pendingActivate = null; b.disabled = false; b.lastChild.textContent = " Join list";
+      const el = $("#jErr"); el.hidden = false;
+      el.textContent = e && (e.code === "not-found" || e.code === "permission-denied") ? "This invite link doesn't work. The list may have been deleted. Ask for a new link." : "Couldn't join right now. Check your connection.";
+    }
+  });
 }
 
 /* ---------- Favorites tab & categories ---------- */
@@ -850,7 +1137,8 @@ function favItem(kind, id) { return kind === "show" ? db.shows[id] : (db.movies 
 function favToast(kind, id, alsoAdded) {
   const it = favItem(kind, id); if (!it) return;
   const name = it.name || it.title;
-  if (it.fav) toast(`${name} added to Favorites.`, "Pick category", () => openCategorySheet(kind, id));
+  if (it.fav) listOverride ? toast(`${name} added to Favorites on ${listName(db.active)}.`)
+                           : toast(`${name} added to Favorites.`, "Pick category", () => openCategorySheet(kind, id));
   else toast(`${name} removed from Favorites.`);
 }
 function allFavorites() {
@@ -871,6 +1159,7 @@ function renderFavorites() {
       <h1>Favorites</h1>
       ${favs.length ? `<button class="btn" id="favPick">${ICON.dice.replace("<svg", '<svg width="18" height="18"')} Pick one</button>` : ""}
     </header>
+    ${listSwitcherHtml()}
     ${favs.length ? `
       <div class="chips">
         <button class="chip ${favFilter === "All" ? "on" : ""}" data-cat="All">All <span class="cn">${favs.length}</span></button>
@@ -886,6 +1175,7 @@ function renderFavorites() {
         <p>Tap the ♡ on any show or movie (on its page, in search results, or in Explore) to save it here for rewatching.</p>
       </div>`}
   `;
+  bindListSwitcher();
   $("#favPick") && ($("#favPick").onclick = () => pickFavorite(favFilter === "None" ? "All" : favFilter));
   app.querySelectorAll("[data-cat]").forEach(b => b.onclick = () => { favFilter = b.dataset.cat; renderFavorites(); });
   $("#newCat") && ($("#newCat").onclick = () => newCategory(c => { favFilter = c; renderFavorites(); }));
@@ -1029,8 +1319,8 @@ async function renderPreview(id) {
     try { await addTvMaze(id, fav ? { fav: true } : { listed: true }); fav ? favToast("show", id) : toast(`Added ${sh.name} to Watching.`); renderShow(id); window.scrollTo(0, 0); }
     catch { b.disabled = false; toast("Couldn't add that show. Check your connection."); renderPreview(id); }
   };
-  $("#pvAdd").onclick = () => add(false);
-  $("#pvFav").onclick = () => add(true);
+  $("#pvAdd").onclick = () => multiList() ? toggleShowInList(id) : add(false);
+  $("#pvFav").onclick = () => multiList() ? toggleShowFav(id) : add(true);
 }
 
 /* ---------- movies on the home list ---------- */
@@ -1055,7 +1345,7 @@ function rowHtml({ s, st }) {
     <span class="rn">${esc(s.name)}${s.fav ? `<span class="heart-mark" aria-label="Favorite">${ICON.heart}</span>` : ""}${nextCode}</span>
     <span class="rs">${status}</span>
     <span class="rw ${st.upcoming ? "soon" : ""}" title="Next new episode">${esc(when)}</span>
-    ${starBtn(true, s.name, "sm")}
+    ${listsBtn("show", s.id, s.name, "sm")}${starBtn(true, s.name, "sm")}
   </div>`;
 }
 function movieRowHtml(m) {
@@ -1063,7 +1353,7 @@ function movieRowHtml(m) {
     ${serviceIcon(m.service, 18)}
     <span class="rn">${esc(m.title)}${m.fav ? `<span class="heart-mark" aria-label="Favorite">${ICON.heart}</span>` : ""}<span class="code">${esc(m.year || "")}</span></span>
     <button class="check sm" aria-label="Watched">${ICON.check}</button>
-    ${starBtn(true, m.title, "sm")}
+    ${listsBtn("movie", m.id, m.title, "sm")}${starBtn(true, m.title, "sm")}
   </div>`;
 }
 function movieCardHtml(m) {
@@ -1075,7 +1365,7 @@ function movieCardHtml(m) {
       <div class="next">${[m.year, "Movie"].filter(Boolean).map(esc).join(" · ")}${m.watched ? " · <b>Watched</b>" : ""}</div>
     </div>
     <button class="check" aria-label="Watched">${ICON.check}</button>
-    ${starBtn(true, m.title)}
+    <div class="line-acts">${listsBtn("movie", m.id, m.title)}${starBtn(true, m.title)}</div>
   </div>`;
 }
 
@@ -1100,10 +1390,10 @@ async function tmdb(path, params = {}) {
 }
 const MAIN_PROVIDERS = [
   ["Netflix", /^netflix$/i], ["Prime Video", /^amazon prime video$/i], ["Disney+", /^disney( plus|\+)$/i],
-  ["Max", /^(hbo )?max$/i], ["Hulu", /^hulu$/i], ["Apple TV+", /^apple tv( plus|\+)?$/i],
+  ["HBO Max", /^(hbo )?max$/i], ["Hulu", /^hulu$/i], ["Apple TV+", /^apple tv( plus|\+)?$/i],
   ["Peacock", /^peacock( premium)?( plus)?$/i], ["Paramount+", /^paramount( plus|\+)$/i]
 ];
-const friendlyProvider = name => (MAIN_PROVIDERS.find(([, re]) => re.test(name.trim())) || [name])[0];
+const friendlyProvider = name => { const n = normalizeService(name); return (MAIN_PROVIDERS.find(([, re]) => re.test(n)) || [n])[0]; };
 const providerCache = {};
 async function providers(type) {
   const k = type + "-" + region();
@@ -1249,26 +1539,28 @@ function pickServiceFrom(d) {
 }
 // Add a TMDB show/movie to the list. Returns { kind, id, title }.
 // opts: { listed, fav } (default: put on Watching)
-async function addFromTmdb(type, id, d, opts = { listed: true }) {
+async function addFromTmdb(type, id, d, opts = { listed: true }, listKey) {
   d = d || await tmdbDetails(type, id);
   const title = d.title || d.name, year = (d.release_date || d.first_air_date || "").slice(0, 4);
-  if (type === "movie") {
+  if (type === "movie") return withList(listKey, () => {
     db.movies = db.movies || {};
     const cur = db.movies[id];
     if (cur) { if (opts.listed) cur.listed = true; if (opts.fav) cur.fav = true; }
     else db.movies[id] = { id: Number(id), title, year, poster: d.poster_path ? IMG + "w185" + d.poster_path : "", service: pickServiceFrom(d), watched: false, addedAt: Date.now(), listed: !!opts.listed, fav: !!opts.fav };
     saveDb();
     return { kind: "movie", id: Number(id), title };
-  }
+  });
   const mazeId = await findOnTvMaze(d, title, year);
   if (!mazeId) throw new Error("notfound");
+  const data = withList(listKey, () => db.shows[mazeId]) ? null : await fetchShow(mazeId);
+  return withList(listKey, () => {
   if (!db.shows[mazeId]) {
-    const data = await fetchShow(mazeId);
     db.shows[mazeId] = { id: mazeId, watched: {}, addedAt: Date.now(), ...data, service: pickServiceFrom(d) || data.defaultService, listed: !!opts.listed, fav: !!opts.fav };
   } else { if (opts.listed) db.shows[mazeId].listed = true; if (opts.fav) db.shows[mazeId].fav = true; }
   db.shows[mazeId].tmdbId = Number(id);
   saveDb();
   return { kind: "show", id: mazeId, title };
+  });
 }
 const starring = new Set(); // "tv-123" while an add is in progress
 function drawExploreGrid() {
@@ -1351,15 +1643,23 @@ async function openExploreItem(type, id) {
       : movie ? `${isListed(movie) ? "" : `<button class="btn" data-a="listmovie">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add to Watching</button>`}<button class="btn ghost fav-toggle ${movie.fav ? "on" : ""}" data-a="fav">${ICON.heart.replace("<svg", '<svg width="18" height="18"')} ${movie.fav ? "Remove from favorites" : "Add to favorites"}</button><button class="btn ghost" data-a="toggle">${movie.watched ? "Mark as not watched" : "Mark as watched"}</button>${isListed(movie) ? `<button class="btn danger" data-a="rmmovie">Remove from Watching</button>` : ""}`
               : `<button class="btn" data-a="addmovie">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add to Watching</button><button class="btn ghost fav-toggle" data-a="addmoviefav">${ICON.heart.replace("<svg", '<svg width="18" height="18"')} Add to favorites</button>`}`;
   const btn = a => content.querySelector(`[data-a="${a}"]`);
+  // With more than one list, adding asks which list(s).
+  if (multiList()) {
+    const item = { id: Number(id), name: title, title, first_air_date: d.first_air_date || "" };
+    const choose = which => () => { closeSheet(); openListChooser({ name: title, which, find: () => libraryEntry(type, item),
+      add: k => addFromTmdb(type, id, d, which === "fav" ? { fav: true } : { listed: true }, k) }); };
+    for (const [a, which] of [["addtv", "listed"], ["addmovie", "listed"], ["addmoviefav", "fav"], ["favtv", "fav"]])
+      if (btn(a) && !(a === "favtv" && show)) { btn(a).onclick = choose(which); btn(a).dataset.chooser = "1"; }
+  }
   btn("open") && (btn("open").onclick = () => { closeSheet(); go("/show/" + show.id); });
   btn("fav") && (btn("fav").onclick = () => { closeSheet(); setFav("movie", id, !movie.fav); });
   btn("listmovie") && (btn("listmovie").onclick = () => { closeSheet(); addToWatching("movie", id); });
   btn("listtv") && (btn("listtv").onclick = () => { closeSheet(); addToWatching("show", show.id); });
-  btn("addmoviefav") && (btn("addmoviefav").onclick = async () => {
+  btn("addmoviefav") && !btn("addmoviefav").dataset.chooser && (btn("addmoviefav").onclick = async () => {
     await addFromTmdb("movie", id, d, { fav: true });
     closeSheet(); refresh(); favToast("movie", id);
   });
-  btn("favtv") && (btn("favtv").onclick = async () => {
+  btn("favtv") && !btn("favtv").dataset.chooser && (btn("favtv").onclick = async () => {
     if (show) { closeSheet(); return setFav("show", show.id, !show.fav); }
     const b = btn("favtv"); b.disabled = true; b.lastChild.textContent = " Adding…";
     try { const added = await addFromTmdb("tv", id, d, { fav: true }); closeSheet(); refresh(); favToast("show", added.id); }
@@ -1372,11 +1672,11 @@ async function openExploreItem(type, id) {
   });
   btn("toggle") && (btn("toggle").onclick = () => { movie.watched = !movie.watched; saveDb(); closeSheet(); render(); });
   btn("rmmovie") && (btn("rmmovie").onclick = () => { closeSheet(); removeItem("movie", id); });
-  btn("addmovie") && (btn("addmovie").onclick = async () => {
+  btn("addmovie") && !btn("addmovie").dataset.chooser && (btn("addmovie").onclick = async () => {
     await addFromTmdb("movie", id, d);
     closeSheet(); refresh(); toast(`Added ${title} to Watching.`);
   });
-  btn("addtv") && (btn("addtv").onclick = async () => {
+  btn("addtv") && !btn("addtv").dataset.chooser && (btn("addtv").onclick = async () => {
     const b = btn("addtv"); b.disabled = true; b.textContent = "Adding…";
     try {
       const added = await addFromTmdb("tv", id, d);
@@ -1390,6 +1690,7 @@ async function openExploreItem(type, id) {
 async function toggleStar(type, it) {
   const key = type + "-" + it.id;
   if (starring.has(key)) return;
+  if (multiList()) return openListChooser({ name: it.title || it.name, which: "listed", find: () => libraryEntry(type, it), add: k => addFromTmdb(type, it.id, undefined, { listed: true }, k) });
   const entry = libraryEntry(type, it);
   if (entry) return isListed(storeOf(entry.kind)[entry.id]) ? removeItem(entry.kind, entry.id) : addToWatching(entry.kind, entry.id);
   const title = it.title || it.name;
@@ -1410,6 +1711,7 @@ function isFavTmdb(type, it) {
 async function toggleHeartTmdb(type, it) {
   const key = type + "-" + it.id;
   if (hearting.has(key) || starring.has(key)) return;
+  if (multiList()) return openListChooser({ name: it.title || it.name, which: "fav", find: () => libraryEntry(type, it), add: k => addFromTmdb(type, it.id, undefined, { fav: true }, k) });
   const e = libraryEntry(type, it);
   if (e) return setFav(e.kind, e.id, !storeOf(e.kind)[e.id].fav);
   hearting.add(key); drawExploreGrid();
@@ -1471,6 +1773,7 @@ function renderShow(id) {
       </div>
     </div>
     ${profileInfoHtml(show).summary}
+    <button class="btn ghost markall" id="markAll"></button>
     <div class="stats" id="summary">${summaryHtml(show)}</div>
     ${show.episodes.length ? "" : `<p class="empty">No episode info listed yet.</p>`}
     <div id="seasons">${[...seasons.entries()].map(([n, eps]) => seasonHtml(show, n, eps, open.has(n))).join("")}</div>
@@ -1505,6 +1808,17 @@ function renderShow(id) {
   $("#svcOtherSave").onclick = () => { const v = $("#svcOther").value.trim(); if (v) setService(v); else { svc.innerHTML = serviceOptions(show); $("#svcOtherRow").hidden = true; } };
   $("#svcOther").onkeydown = e => { if (e.key === "Enter") $("#svcOtherSave").click(); };
   bindSeasons(id);
+  drawMarkAll(id);
+  $("#markAll").onclick = () => {
+    const eps = regularEps(show).filter(aired);
+    const allSeen = eps.length && eps.every(e => show.watched[e.id]);
+    const before = { ...show.watched };
+    if (allSeen) eps.forEach(e => delete show.watched[e.id]);
+    else { eps.forEach(e => show.watched[e.id] = show.watched[e.id] || Date.now()); show.lastWatchedAt = Date.now(); }
+    saveDb(); redrawSeasons(id);
+    toast(allSeen ? `Unmarked all of ${show.name}.` : `Marked all ${eps.length} episodes of ${show.name} as watched.`, "Undo",
+      () => { show.watched = before; saveDb(); if (location.hash === "#/show/" + id) redrawSeasons(id); });
+  };
 
   refreshShow(id).then(changed => { if (changed && location.hash === "#/show/" + id) renderShow(id); }).catch(() => {});
 }
@@ -1522,7 +1836,7 @@ function summaryHtml(show) {
        + tile(reg.length, reg.length === 1 ? "Episode" : "Episodes", `${watched} watched`)
        + tile(airedLeft, "Left to watch", notOut ? `+${notOut} not out yet` : "all are out");
 }
-const MAIN_SERVICES = ["Netflix", "Hulu", "Max", "Disney+", "Prime Video", "Apple TV+", "Peacock", "Paramount+", "YouTube", "YouTube TV", "Cable / Live TV"];
+const MAIN_SERVICES = ["Netflix", "Hulu", "HBO Max", "Disney+", "Prime Video", "Apple TV+", "Peacock", "Paramount+", "YouTube", "YouTube TV", "Cable / Live TV"];
 const OTHER = "__other__";
 function serviceOptions(show) {
   const cur = show.service || "";
@@ -1577,6 +1891,14 @@ function bindSeasons(id) {
   });
   root.querySelectorAll(".ep .check").forEach(c => c.onclick = () => toggleEp(id, Number(c.closest(".ep").dataset.ep)));
 }
+function drawMarkAll(id) {
+  const show = db.shows[id], b = $("#markAll");
+  if (!b || !show) return;
+  const eps = regularEps(show).filter(aired);
+  const allSeen = eps.length > 0 && eps.every(e => show.watched[e.id]);
+  b.hidden = !eps.length;
+  b.innerHTML = allSeen ? "Unmark all episodes" : `${ICON.check.replace("<svg", '<svg width="18" height="18"')} Mark all as watched`;
+}
 function redrawSeasons(id) {
   const show = db.shows[id];
   const y = window.scrollY;
@@ -1585,6 +1907,7 @@ function redrawSeasons(id) {
   $("#seasons").innerHTML = [...seasons.entries()].map(([n, eps]) => seasonHtml(show, n, eps, openSeasons[id].has(n))).join("");
   const st = stats(show);
   $("#summary").innerHTML = summaryHtml(show);
+  drawMarkAll(id);
   bindSeasons(id);
   window.scrollTo(0, y);
 }
@@ -1638,7 +1961,8 @@ const FIREBASE_CONFIG = {
 };
 const FB_SDK = "https://www.gstatic.com/firebasejs/13.2.0/";
 const account = { enabled: !!(FIREBASE_CONFIG || window.MYSHOWS_TEST_BACKEND), ready: false, user: null, lastSync: 0, error: "", syncing: false };
-let backend = null, unwatch = null, pushTimer = null, applyingRemote = false;
+let backend = null, unwatchMe = null, unwatchLists = null, applyingRemote = false, pendingActivate = null;
+const pushTimers = {};   // list key -> pending save
 
 async function loadBackend() {
   if (window.MYSHOWS_TEST_BACKEND) return window.MYSHOWS_TEST_BACKEND;
@@ -1647,8 +1971,9 @@ async function loadBackend() {
   const app = initializeApp(FIREBASE_CONFIG);
   const auth = A.getAuth(app), fs = F.getFirestore(app);
   const ref = uid => F.doc(fs, "users", uid);
+  const listRef = id => F.doc(fs, "lists", id);
   return {
-    onAuth: cb => A.onAuthStateChanged(auth, u => cb(u ? { uid: u.uid, email: u.email } : null)),
+    onAuth: cb => A.onAuthStateChanged(auth, u => cb(u ? { uid: u.uid, email: u.email, name: u.displayName || "" } : null)),
     signIn: (e, p) => A.signInWithEmailAndPassword(auth, e, p),
     signUp: (e, p) => A.createUserWithEmailAndPassword(auth, e, p),
     signInGoogle: () => A.signInWithPopup(auth, new A.GoogleAuthProvider()),
@@ -1656,47 +1981,66 @@ async function loadBackend() {
     signOut: () => A.signOut(auth),
     load: async uid => { const snap = await F.getDoc(ref(uid)); return snap.exists() ? snap.data() : null; },
     save: (uid, data) => F.setDoc(ref(uid), data),
-    watch: (uid, cb, onErr) => F.onSnapshot(ref(uid), snap => { if (!snap.metadata.hasPendingWrites) cb(snap.exists() ? snap.data() : null); }, onErr)
+    watch: (uid, cb, onErr) => F.onSnapshot(ref(uid), snap => { if (!snap.metadata.hasPendingWrites) cb(snap.exists() ? snap.data() : null); }, onErr),
+    // shared lists
+    watchLists: (uid, cb, onErr) => F.onSnapshot(F.query(F.collection(fs, "lists"), F.where("members", "array-contains", uid)),
+      snap => cb(snap.docs.map(d => ({ id: d.id, data: d.data(), pending: d.metadata.hasPendingWrites }))), onErr),
+    createList: async data => (await F.addDoc(F.collection(fs, "lists"), data)).id,
+    saveList: (id, data) => F.setDoc(listRef(id), data, { mergeFields: Object.keys(data) }),
+    joinList: (id, uid, name) => F.updateDoc(listRef(id), { members: F.arrayUnion(uid), ["memberNames." + uid]: name }),
+    leaveList: (id, uid) => F.updateDoc(listRef(id), { members: F.arrayRemove(uid), ["memberNames." + uid]: F.deleteField() }),
+    deleteList: id => F.deleteDoc(listRef(id))
   };
 }
 function deviceId() {
   if (!db.deviceId) { db.deviceId = Math.random().toString(36).slice(2, 10); writeLocal(); }
   return db.deviceId;
 }
-// What gets saved to the account: your list, not the cached episode guides (those re-download from TVMaze).
-function cloudData() {
-  const shows = {};
-  for (const [id, sh] of Object.entries(db.shows)) {
-    const { episodes, fetchedAt, defaultService, summary, genres, rating, runtime, ended, ...keep } = sh;
+// What gets saved for a list: the list itself, not cached episode guides/profile info (those re-download from TVMaze).
+const CACHE_FIELDS = ["episodes", "fetchedAt", "defaultService", "summary", "genres", "rating", "runtime", "ended"];
+function listPayload(key) {
+  const L = db.lists[key], shows = {};
+  for (const [id, sh] of Object.entries(L.shows || {})) {
+    const keep = { ...sh }; for (const f of CACHE_FIELDS) delete keep[f];
     shows[id] = keep;
   }
-  const st = settings();
-  const out = { v: 1, updatedAt: Date.now(), device: deviceId(), shows, movies: db.movies || {},
-                settings: { view: st.view, region: st.region, tmdbKey: st.tmdbKey }, favCategories: db.favCategories };
+  const out = { shows, movies: L.movies || {}, favCategories: L.favCategories || null };
+  if (key === "me") { const st = settings(); out.v = 1; out.settings = { view: st.view, region: st.region, tmdbKey: st.tmdbKey }; }
+  else out.name = L.name || "Shared list";
   return JSON.parse(JSON.stringify(out)); // drops undefined values (Firestore rejects them)
 }
-// Short fingerprint of the list, remembered on the device, to tell whether anything changed since the last sync.
-function userSig() {
-  const c = cloudData(); delete c.updatedAt; delete c.device;
-  const str = JSON.stringify(c);
+function cloudData() { return { ...listPayload("me"), updatedAt: Date.now(), device: deviceId() }; }
+// Short fingerprint of a list, remembered on the device, to tell whether anything changed since the last sync.
+function listSig(key) {
+  const str = JSON.stringify(listPayload(key));
   let h = 5381; for (let i = 0; i < str.length; i++) h = (h * 33 ^ str.charCodeAt(i)) >>> 0;
   return h.toString(36) + "." + str.length;
 }
-function markSynced() { db.syncedSig = userSig(); db.dirty = false; writeLocal(); }
-function applyCloud(data) {
+const syncOf = key => (db.sync[key] = db.sync[key] || { sig: null, dirty: false });
+function markSynced(key) { const s = syncOf(key); s.sig = listSig(key); s.dirty = false; writeLocal(); }
+function applyListData(key, data) {
   applyingRemote = true;
-  const old = db.shows, shows = {};
-  for (const [id, sh] of Object.entries(data.shows || {}))
-    shows[id] = { episodes: (old[id] && old[id].episodes) || [], fetchedAt: (old[id] && old[id].fetchedAt) || 0, ...sh };
-  db.shows = shows;
-  db.movies = data.movies || {};
-  if (Array.isArray(data.favCategories)) db.favCategories = data.favCategories;
-  const st = settings();
-  for (const [k, v] of Object.entries(data.settings || {})) if (v !== undefined && v !== null && v !== "") st[k] = v;
+  const L = db.lists[key] = db.lists[key] || { shows: {}, movies: {} };
+  const old = L.shows || {}, shows = {};
+  for (const [id, sh] of Object.entries(data.shows || {})) {
+    const cache = {}; if (old[id]) for (const f of CACHE_FIELDS) if (old[id][f] !== undefined) cache[f] = old[id][f];
+    shows[id] = { episodes: [], fetchedAt: 0, ...cache, ...sh };
+  }
+  L.shows = shows;
+  L.movies = data.movies || {};
+  normalizeListServices(L);
+  if (Array.isArray(data.favCategories)) L.favCategories = data.favCategories;
+  if (key === "me") {
+    const st = settings();
+    for (const [k, v] of Object.entries(data.settings || {})) if (v !== undefined && v !== null && v !== "") st[k] = v;
+  } else {
+    L.name = data.name || "Shared list";
+    L.members = data.members || []; L.memberNames = data.memberNames || {}; L.owner = data.owner || "";
+  }
   applyingRemote = false;
-  markSynced();
+  markSynced(key);
 }
-// First time this device signs in to an account: combine both lists so nothing is lost.
+// First time this device signs in to an account: combine both copies of My list so nothing is lost.
 function mergeLocalInto(cloud) {
   const out = JSON.parse(JSON.stringify(cloud));
   out.shows = out.shows || {}; out.movies = out.movies || {}; out.settings = out.settings || {};
@@ -1719,57 +2063,93 @@ function mergeLocalInto(cloud) {
 }
 function onLocalChange() {
   if (applyingRemote || !db.linkedUid) return;
-  if (userSig() === db.syncedSig) return;
-  if (!db.dirty) { db.dirty = true; writeLocal(); }
-  if (!account.user || !backend) return;   // not connected yet: pushed when sign-in finishes
-  clearTimeout(pushTimer);
-  pushTimer = setTimeout(pushNow, 1200);
+  let changed = false;
+  for (const key of Object.keys(db.lists)) {
+    const s = syncOf(key), cur = listSig(key);
+    if (s.sig === null) { s.sig = cur; changed = true; continue; }
+    if (cur === s.sig) continue;
+    s.dirty = true; changed = true;
+    if (account.user && backend) schedulePush(key);   // not connected yet: pushed when sign-in finishes
+  }
+  if (changed) writeLocal();
   updateSyncLine();
 }
-async function pushNow() {
-  pushTimer = null;
-  if (!account.user) return;
-  const data = cloudData();
+function schedulePush(key, ms = 1200) { clearTimeout(pushTimers[key]); pushTimers[key] = setTimeout(() => pushNow(key), ms); }
+async function pushNow(key = "me") {
+  clearTimeout(pushTimers[key]); delete pushTimers[key];
+  if (!account.user || !db.lists[key]) return;
   account.syncing = true; updateSyncLine();
   try {
-    await backend.save(account.user.uid, data);
-    markSynced();
+    if (key === "me") await backend.save(account.user.uid, cloudData());
+    else await backend.saveList(key, { ...listPayload(key), updatedAt: Date.now() });
+    if (db.lists[key]) markSynced(key);
     account.lastSync = Date.now(); account.error = "";
   } catch (e) {
-    account.error = "Couldn't save to your account. Will retry.";
-    clearTimeout(pushTimer); pushTimer = setTimeout(pushNow, 20000);
+    const gone = key !== "me" && e && (e.code === "permission-denied" || e.code === "not-found");
+    if (!gone) { account.error = "Couldn't save to your account. Will retry."; schedulePush(key, 20000); }
   }
   account.syncing = false; updateSyncLine();
 }
 function onRemote(data) {
-  if (!data || pushTimer || db.dirty) return;   // our own unsaved changes win; they're about to be pushed
-  const before = userSig();
-  applyCloud(data);
+  if (!data || pushTimers.me || syncOf("me").dirty) return;   // our own unsaved changes win; they're about to be pushed
+  const before = listSig("me");
+  applyListData("me", data);
   account.lastSync = Date.now(); updateSyncLine();
-  if (userSig() !== before) { refreshQuiet(); backgroundRefresh(); }
+  if (listSig("me") !== before && db.active === "me") { refreshQuiet(); backgroundRefresh(); }
+}
+// Live updates for every shared list you're a member of.
+function onLists(docs) {
+  const seen = new Set();
+  let activeChanged = false;
+  for (const { id, data, pending } of docs) {
+    seen.add(id);
+    const L = db.lists[id];
+    if (L) { L.members = data.members || []; L.memberNames = data.memberNames || {}; L.owner = data.owner || ""; }
+    if (L && (pending || pushTimers[id] || syncOf(id).dirty)) continue;   // our unsaved edits win
+    const before = L ? listSig(id) : "";
+    applyListData(id, data);
+    if (db.active === id && listSig(id) !== before) activeChanged = true;
+  }
+  for (const id of Object.keys(db.lists)) if (id !== "me" && !seen.has(id)) {
+    const name = listName(id);
+    delete db.lists[id]; delete db.sync[id];
+    if (db.active === id) { db.active = "me"; activeChanged = true; toast(`You're no longer in "${name}".`); }
+  }
+  if (pendingActivate && db.lists[pendingActivate]) {
+    db.active = pendingActivate; pendingActivate = null; activeChanged = true;
+    toast(`Joined "${listName(db.active)}".`); go("/");
+  }
+  writeLocal();
+  account.lastSync = Date.now(); updateSyncLine();
+  refreshQuiet();
+  if (activeChanged) backgroundRefresh();
 }
 async function linkAccount(user) {
   account.user = user; account.error = "";
   try {
     const cloud = await backend.load(user.uid);
     if (db.linkedUid === user.uid) {
-      if (db.dirty || !cloud) await pushNow(); else applyCloud(cloud);
+      if (syncOf("me").dirty || !cloud) await pushNow("me"); else applyListData("me", cloud);
     } else {
-      if (cloud) applyCloud(mergeLocalInto(cloud));
+      if (cloud) applyListData("me", mergeLocalInto(cloud));
       db.linkedUid = user.uid; writeLocal();
-      await pushNow();
+      await pushNow("me");
     }
     account.lastSync = Date.now();
   } catch (e) {
     account.error = "Couldn't reach your account. Your changes are kept on this device.";
   }
   refreshQuiet(); backgroundRefresh();
-  if (unwatch) unwatch();
-  unwatch = backend.watch(user.uid, onRemote, () => { account.error = "Lost connection to your account."; updateSyncLine(); });
+  const onErr = () => { account.error = "Lost connection to your account."; updateSyncLine(); };
+  if (unwatchMe) unwatchMe();
+  unwatchMe = backend.watch(user.uid, onRemote, onErr);
+  if (unwatchLists) unwatchLists();
+  unwatchLists = backend.watchLists ? backend.watchLists(user.uid, onLists, onErr) : null;
+  for (const key of Object.keys(db.lists)) if (key !== "me" && syncOf(key).dirty) schedulePush(key);   // offline edits
 }
 function syncStatusText() {
   if (account.error) return account.error;
-  if (account.syncing || pushTimer) return "Saving…";
+  if (account.syncing || Object.keys(pushTimers).length) return "Saving…";
   if (!account.lastSync) return "Connecting…";
   const mins = Math.round((Date.now() - account.lastSync) / 60000);
   return "All changes saved" + (mins >= 1 ? ` · synced ${mins} min ago` : "");
@@ -1860,20 +2240,24 @@ function openAccountSheet(mode) {
 function confirmSignOut() {
   sheet(`
     <h3>Sign out?</h3>
-    <p>Your list stays saved in your account. It will be removed from this device until you sign in again.</p>
+    <p>Your lists stay saved in your account. They'll be removed from this device until you sign in again.</p>
     <button class="btn danger" data-a="out">Sign out</button>
   `, (m, close) => {
     m.querySelector('[data-a="out"]').onclick = async () => {
       close();
-      if (pushTimer) { clearTimeout(pushTimer); await pushNow(); }
+      for (const key of Object.keys(pushTimers)) await pushNow(key);
       try { await backend.signOut(); } catch {}
     };
   });
 }
 function clearLocalAfterSignOut() {
-  if (unwatch) { unwatch(); unwatch = null; }
-  const keep = { view: settings().view, region: settings().region, hideAcctBanner: true };
-  db = { shows: {}, movies: {}, settings: keep, deviceId: db.deviceId };
+  if (unwatchMe) { unwatchMe(); unwatchMe = null; }
+  if (unwatchLists) { unwatchLists(); unwatchLists = null; }
+  for (const k of Object.keys(pushTimers)) { clearTimeout(pushTimers[k]); delete pushTimers[k]; }
+  const st = settings();
+  const keep = { view: st.view, exView: st.exView, region: st.region, hideAcctBanner: true };
+  db = wireDb({ lists: { me: {} }, settings: keep, deviceId: db.deviceId });
+  filter = "All"; favFilter = "All";
   writeLocal();
 }
 async function startAccounts() {
