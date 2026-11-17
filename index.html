@@ -191,6 +191,11 @@ a{color:var(--accent)}
 .profile-actions{display:flex;flex-direction:column;gap:10px;margin:8px 0 6px}
 .profile-actions .btn{height:46px}
 .fillsvg{fill:currentColor;stroke:currentColor}
+.svc-row select{flex:1;min-width:0;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:0 10px;font-size:16px;color:var(--text)}
+.svc-row select:focus{outline:2px solid var(--accent);outline-offset:-1px}
+.svc-other{display:flex;gap:8px;margin-top:8px}
+.svc-other[hidden]{display:none}
+.svc-other input{flex:1;min-width:0;height:36px;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:0 10px;font-size:16px}
 .count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;align-self:flex-start;padding-top:2px}
 .empty{text-align:center;color:var(--muted);padding:56px 16px}
 .empty h2{color:var(--text);font-size:20px;margin-bottom:6px}
@@ -1232,8 +1237,8 @@ function renderShow(id) {
         <div class="field">
           <label for="svc">Watching on</label>
           <div class="svc-row"><span id="svcIco">${serviceIcon(show.service, 40)}</span>
-          <input id="svc" list="svcList" value="${esc(show.service || "")}" placeholder="e.g. Netflix"></div>
-          <datalist id="svcList">${knownServices().map(s => `<option value="${esc(s)}">`).join("")}</datalist>
+          <select id="svc">${serviceOptions(show)}</select></div>
+          <div class="svc-other" id="svcOtherRow" hidden><input id="svcOther" placeholder="Service name" autocomplete="off"><button class="btn small" id="svcOtherSave">Save</button></div>
         </div>
       </div>
     </div>
@@ -1257,11 +1262,22 @@ function renderShow(id) {
     toast(show.fav ? `${show.name} added to Favorites.` : `${show.name} removed from Favorites.`);
   };
   const svc = $("#svc");
-  svc.onchange = svc.onblur = () => {
-    const v = svc.value.trim();
+  const setService = v => {
+    v = v.trim();
     if (v !== (show.service || "")) { show.service = v; saveDb(); }
     $("#svcIco").innerHTML = serviceIcon(v, 40);
+    svc.innerHTML = serviceOptions(show);
+    $("#svcOtherRow").hidden = true;
   };
+  svc.onchange = () => {
+    if (svc.value === OTHER) {
+      $("#svcOtherRow").hidden = false; $("#svcOther").value = ""; $("#svcOther").focus();
+      return;
+    }
+    setService(svc.value);
+  };
+  $("#svcOtherSave").onclick = () => { const v = $("#svcOther").value.trim(); if (v) setService(v); else { svc.innerHTML = serviceOptions(show); $("#svcOtherRow").hidden = true; } };
+  $("#svcOther").onkeydown = e => { if (e.key === "Enter") $("#svcOtherSave").click(); };
   bindSeasons(id);
 
   refreshShow(id).then(changed => { if (changed && location.hash === "#/show/" + id) renderShow(id); }).catch(() => {});
@@ -1280,10 +1296,17 @@ function summaryHtml(show) {
        + tile(reg.length, reg.length === 1 ? "Episode" : "Episodes", `${watched} watched`)
        + tile(airedLeft, "Left to watch", notOut ? `+${notOut} not out yet` : "all are out");
 }
-function knownServices() {
-  const base = ["Netflix", "Hulu", "Max", "Disney+", "Prime Video", "Apple TV+", "Peacock", "Paramount+", "YouTube TV", "Cable / Live TV"];
-  const mine = Object.values(db.shows).map(s => s.service).filter(Boolean);
-  return [...new Set([...mine, ...base])];
+const MAIN_SERVICES = ["Netflix", "Hulu", "Max", "Disney+", "Prime Video", "Apple TV+", "Peacock", "Paramount+", "YouTube", "YouTube TV", "Cable / Live TV"];
+const OTHER = "__other__";
+function serviceOptions(show) {
+  const cur = show.service || "";
+  const extra = [...new Set([...Object.values(db.shows), ...Object.values(db.movies || {})].map(x => x.service)
+    .concat(show.defaultService || [], cur || []).filter(v => v && !MAIN_SERVICES.includes(v)))].sort((a, b) => a.localeCompare(b));
+  const opt = v => `<option value="${esc(v)}" ${v === cur ? "selected" : ""}>${esc(v)}</option>`;
+  return `<option value="" ${cur ? "" : "selected"}>Not set</option>
+    <optgroup label="Streaming services">${MAIN_SERVICES.map(opt).join("")}</optgroup>
+    ${extra.length ? `<optgroup label="Other services">${extra.map(opt).join("")}</optgroup>` : ""}
+    <option value="${OTHER}">Other…</option>`;
 }
 function seasonHtml(show, n, eps, isOpen) {
   const w = show.watched;
