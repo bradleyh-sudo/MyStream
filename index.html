@@ -1628,7 +1628,14 @@ function showMenu(id) {
 /* ---------- accounts & sync (Firebase) ---------- */
 // Paste the web app config from Firebase console → Project settings → Your apps.
 // These values are not secret; your data is protected by the Firestore rules (see firestore.rules).
-const FIREBASE_CONFIG = null;
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBBGqPandh4NRU0-rYYUqUzZETFpid8_Nc",
+  authDomain: "mystream-815e1.firebaseapp.com",
+  projectId: "mystream-815e1",
+  storageBucket: "mystream-815e1.firebasestorage.app",
+  messagingSenderId: "950037467753",
+  appId: "1:950037467753:web:1d5b5d8b472d4d8d1188f8"
+};
 const FB_SDK = "https://www.gstatic.com/firebasejs/13.2.0/";
 const account = { enabled: !!(FIREBASE_CONFIG || window.MYSHOWS_TEST_BACKEND), ready: false, user: null, lastSync: 0, error: "", syncing: false };
 let backend = null, unwatch = null, pushTimer = null, applyingRemote = false;
