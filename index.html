@@ -215,6 +215,10 @@ a{color:var(--accent)}
 .catopt input{width:20px;height:20px;accent-color:var(--accent)}
 .catopt span{flex:1}
 .catdel{color:var(--muted);width:36px;height:36px;font-size:14px}
+.star-btn svg{fill:none;stroke:currentColor}
+.star-btn.on{color:var(--accent)}
+.star-btn.on svg{fill:currentColor}
+.notlisted{text-align:center;margin:0}
 .count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;align-self:flex-start;padding-top:2px}
 .empty{text-align:center;color:var(--muted);padding:56px 16px}
 .empty h2{color:var(--text);font-size:20px;margin-bottom:6px}
@@ -272,7 +276,7 @@ a{color:var(--accent)}
 <body>
 <div class="wrap" id="app"></div>
 <nav id="tabs" class="tabs" hidden>
-  <button data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></svg>My Shows</button>
+  <button data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Watching</button>
   <button data-tab="favorites"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.2-9.4C1.6 7.6 3.9 4.5 7.2 4.5c2 0 3.6 1.1 4.8 2.9 1.2-1.8 2.8-2.9 4.8-2.9 3.3 0 5.6 3.1 4.4 6.6-1.7 4.8-9.2 9.4-9.2 9.4z"/></svg>Favorites</button>
   <button data-tab="explore"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>Explore</button>
 </nav>
@@ -408,18 +412,39 @@ function serviceIcon(name, size = 22) {
 }
 
 function starBtn(on, label, extra = "") {
-  return `<button class="star ${on ? "on" : ""} ${extra}" data-star aria-pressed="${on}" aria-label="${on ? "Remove " + esc(label) + " from my list" : "Add " + esc(label) + " to my list"}">${ICON.star}</button>`;
+  return `<button class="star ${on ? "on" : ""} ${extra}" data-star aria-pressed="${on}" aria-label="${on ? "Remove " + esc(label) + " from Watching" : "Add " + esc(label) + " to Watching"}">${ICON.star}</button>`;
 }
 function heartBtn(on, label, extra = "") {
   return `<button class="heart ${on ? "on" : ""} ${extra}" data-heart aria-pressed="${on}" aria-label="${on ? "Remove " + esc(label) + " from favorites" : "Add " + esc(label) + " to favorites"}">${ICON.heart}</button>`;
 }
-// Remove a show or movie from the list, with an Undo.
+// A show/movie can be on the Watching list, in Favorites, or both.
+const isListed = x => !!x && x.listed !== false;
+const storeOf = kind => kind === "show" ? db.shows : (db.movies = db.movies || {});
+// Take it off Watching (with Undo). Favorites keep it; otherwise it's deleted.
 function removeItem(kind, id) {
-  const store = kind === "show" ? db.shows : (db.movies = db.movies || {});
-  const backup = store[id];
-  if (!backup) return;
+  const store = storeOf(kind), it = store[id];
+  if (!it) return;
+  const name = it.name || it.title;
+  if (it.fav) {
+    it.listed = false; saveDb(); refresh();
+    return toast(`Removed ${name} from Watching. It's still in Favorites.`, "Undo", () => { it.listed = true; saveDb(); refresh(); });
+  }
   delete store[id]; saveDb(); refresh();
-  toast(`Removed ${backup.name || backup.title}.`, "Undo", () => { store[id] = backup; saveDb(); refresh(); });
+  toast(`Removed ${name}.`, "Undo", () => { store[id] = it; saveDb(); refresh(); });
+}
+function addToWatching(kind, id) {
+  const it = storeOf(kind)[id]; if (!it) return;
+  it.listed = true; saveDb(); refresh(); toast(`Added ${it.name || it.title} to Watching.`);
+}
+// Favorite on/off. Un-favoriting something that isn't on Watching deletes it (with Undo).
+function setFav(kind, id, on) {
+  const store = storeOf(kind), it = store[id];
+  if (!it) return;
+  const name = it.name || it.title;
+  if (on) { it.fav = true; saveDb(); refresh(); return favToast(kind, id); }
+  if (!isListed(it)) { delete store[id]; saveDb(); refresh(); }
+  else { it.fav = false; saveDb(); refresh(); }
+  toast(`${name} removed from Favorites.`, "Undo", () => { store[id] = it; it.fav = true; saveDb(); refresh(); });
 }
 function refresh() {
   const h = location.hash.replace(/^#\/?/, "");
@@ -427,7 +452,11 @@ function refresh() {
   else if (h === "favorites") renderFavorites();
   else if (h === "add") { if (lastResults) drawResults(lastResults); }
   else if (!h || h === "/") renderHome();
-  else render();
+  else {
+    const m = h.match(/^show\/(\d+)$/);
+    if (m && db.shows[m[1]]) { const y = window.scrollY; renderShow(m[1]); window.scrollTo(0, y); }
+    else render();
+  }
 }
 // Enter/Space on clickable non-button elements
 document.addEventListener("keydown", e => {
@@ -492,8 +521,8 @@ function goBack() {
 
 /* ---------- home ---------- */
 function renderHome() {
-  const shows = Object.values(db.shows);
-  const movies = Object.values(db.movies || {});
+  const shows = Object.values(db.shows).filter(isListed);
+  const movies = Object.values(db.movies || {}).filter(isListed);
   const services = [...new Set([...shows, ...movies].map(s => s.service || "No service set"))].sort((a, b) => a.localeCompare(b));
   const visibleMovies = movies.filter(m => filter === "All" || (m.service || "No service set") === filter)
     .sort((a, b) => (a.watched ? 1 : 0) - (b.watched ? 1 : 0) || (b.addedAt || 0) - (a.addedAt || 0));
@@ -519,7 +548,7 @@ function renderHome() {
 
   app.innerHTML = `
     <header class="bar">
-      <h1>My Shows</h1>
+      <h1>Watching</h1>
       <button class="icon-btn" id="menuBtn" aria-label="Menu">${ICON.more}</button>
       <button class="btn" id="addBtn">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add show</button>
     </header>
@@ -531,9 +560,9 @@ function renderHome() {
         ${services.length > 1 ? `<div class="chips">${["All", ...services].map(s => `<button class="chip ${s === filter ? "on" : ""}" data-f="${esc(s)}">${esc(s)}</button>`).join("")}</div>` : `<div class="chips"></div>`}
         ${viewToggle}
       </div>
-      ${section("Watching", "", watching)}
+      ${section("In progress", "", watching)}
       ${section("Caught up", "", caught)}
-      ${section("Haven't started", "Saved for later. Check off an episode and it moves up to Watching.", notStarted)}
+      ${section("Haven't started", "Saved for later. Check off an episode and it moves up to In progress.", notStarted)}
       ${otherMovies.length ? `<div class="section-label">Movies <span class="n">${otherMovies.filter(m => !m.watched).length || "all watched"}</span></div>${textView ? `<div class="rows">${otherMovies.map(movieRowHtml).join("")}</div>` : `<div class="list">${otherMovies.map(movieCardHtml).join("")}</div>`}` : ""}
     ` : `
       <div class="empty">
@@ -739,12 +768,12 @@ function drawResults(list) {
   const out = $("#results");
   if (!list.length) { out.innerHTML = `<p class="empty">No shows found by that name.</p>`; return; }
   out.innerHTML = `<div class="list">${list.map(s => {
-    const have = !!db.shows[s.id];
+    const have = isListed(db.shows[s.id]);
     const yr = (s.premiered || "").slice(0, 4);
     const ended = s.ended ? s.ended.slice(0, 4) : "";
     const span = yr ? (s.status === "Ended" && ended && ended !== yr ? `${yr}–${ended}` : s.status === "Running" ? `${yr}–` : yr) : "";
     const svc = serviceOf(s);
-    const fav = have && db.shows[s.id].fav;
+    const fav = !!(db.shows[s.id] && db.shows[s.id].fav);
     return `<div class="card result" data-id="${s.id}" role="button" tabindex="0" aria-label="${esc(s.name)}">
       ${posterHtml(s.image && (s.image.medium || s.image.original), s.name)}
       <div class="meta">
@@ -767,20 +796,23 @@ function drawResults(list) {
 }
 // Add/remove/favorite a TVMaze show without leaving the page.
 const adding = new Set();
+// opts: { listed: put on Watching, fav: put in Favorites }
 async function addTvMaze(id, opts = {}) {
   id = Number(id);
-  if (db.shows[id]) { if (opts.fav) { db.shows[id].fav = true; saveDb(); } return db.shows[id]; }
+  const cur = db.shows[id];
+  if (cur) { if (opts.fav) cur.fav = true; if (opts.listed) cur.listed = true; saveDb(); return cur; }
   const data = previewCache[id] || await fetchShow(id);
-  db.shows[id] = { id, service: data.defaultService, watched: {}, addedAt: Date.now(), ...data, fav: !!opts.fav };
+  db.shows[id] = { id, service: data.defaultService, watched: {}, addedAt: Date.now(), ...data, fav: !!opts.fav, listed: !!opts.listed };
   saveDb();
   return db.shows[id];
 }
 async function toggleShowInList(id) {
   id = Number(id);
   if (adding.has(id)) return;
-  if (db.shows[id]) return removeItem("show", id);
+  if (isListed(db.shows[id])) return removeItem("show", id);
+  if (db.shows[id]) return addToWatching("show", id);
   adding.add(id); refresh();
-  try { const s = await addTvMaze(id); toast(`Added ${s.name}.`); }
+  try { const s = await addTvMaze(id, { listed: true }); toast(`Added ${s.name} to Watching.`); }
   catch { toast("Couldn't add that show. Check your connection."); }
   adding.delete(id); refresh();
 }
@@ -788,9 +820,9 @@ async function toggleShowFav(id) {
   id = Number(id);
   if (adding.has(id)) return;
   const s = db.shows[id];
-  if (s) { s.fav = !s.fav; saveDb(); refresh(); return favToast("show", id); }
+  if (s) return setFav("show", id, !s.fav);
   adding.add(id); refresh();
-  try { await addTvMaze(id, { fav: true }); favToast("show", id, true); }
+  try { await addTvMaze(id, { fav: true }); favToast("show", id); }
   catch { toast("Couldn't add that show. Check your connection."); }
   adding.delete(id); refresh();
 }
@@ -803,7 +835,7 @@ function favItem(kind, id) { return kind === "show" ? db.shows[id] : (db.movies 
 function favToast(kind, id, alsoAdded) {
   const it = favItem(kind, id); if (!it) return;
   const name = it.name || it.title;
-  if (it.fav) toast(`${name} ${alsoAdded ? "added to your list and Favorites" : "added to Favorites"}.`, "Pick category", () => openCategorySheet(kind, id));
+  if (it.fav) toast(`${name} added to Favorites.`, "Pick category", () => openCategorySheet(kind, id));
   else toast(`${name} removed from Favorites.`);
 }
 function allFavorites() {
@@ -844,8 +876,7 @@ function renderFavorites() {
   $("#newCat") && ($("#newCat").onclick = () => newCategory(c => { favFilter = c; renderFavorites(); }));
   app.querySelectorAll(".favrow").forEach(r => r.onclick = e => {
     const { kind, id } = r.dataset;
-    if (e.target.closest("[data-heart]")) { favItem(kind, id).fav = false; saveDb(); renderFavorites();
-      return toast(`${favItem(kind, id).name || favItem(kind, id).title} removed from Favorites.`, "Undo", () => { favItem(kind, id).fav = true; saveDb(); refresh(); }); }
+    if (e.target.closest("[data-heart]")) return setFav(kind, id, false);
     if (e.target.closest("[data-cats]")) return openCategorySheet(kind, id);
     kind === "show" ? go("/show/" + id) : openExploreItem("movie", id);
   });
@@ -965,7 +996,7 @@ async function renderPreview(id) {
     </div>
     ${info.summary}
     <div class="profile-actions">
-      <button class="btn" id="pvAdd">${ICON.star.replace("<svg", '<svg width="18" height="18" class="fillsvg"')} Add to My Shows</button>
+      <button class="btn" id="pvAdd">${ICON.star.replace("<svg", '<svg width="18" height="18" class="fillsvg"')} Add to Watching</button>
       <button class="btn ghost fav-toggle" id="pvFav">${ICON.heart.replace("<svg", '<svg width="18" height="18"')} Add to Favorites</button>
     </div>
     <div class="section-label">Episodes</div>
@@ -980,7 +1011,7 @@ async function renderPreview(id) {
   app.querySelectorAll(".season-head").forEach(h => h.onclick = () => h.parentElement.classList.toggle("open"));
   const add = async fav => {
     const b = fav ? $("#pvFav") : $("#pvAdd"); b.disabled = true; b.lastChild.textContent = " Adding…";
-    try { await addTvMaze(id, { fav }); fav ? favToast("show", id, true) : toast(`Added ${sh.name}.`); renderShow(id); window.scrollTo(0, 0); }
+    try { await addTvMaze(id, fav ? { fav: true } : { listed: true }); fav ? favToast("show", id) : toast(`Added ${sh.name} to Watching.`); renderShow(id); window.scrollTo(0, 0); }
     catch { b.disabled = false; toast("Couldn't add that show. Check your connection."); renderPreview(id); }
   };
   $("#pvAdd").onclick = () => add(false);
@@ -1188,7 +1219,7 @@ function libraryEntry(type, item) {
   const s = shows.find(s => s.tmdbId === item.id) || shows.find(s => !s.tmdbId && (s.name || "").toLowerCase() === name && (!yr || !s.year || s.year === yr));
   return s ? { kind: "show", id: s.id } : null;
 }
-const inLibrary = (type, item) => !!libraryEntry(type, item);
+const inLibrary = (type, item) => { const e = libraryEntry(type, item); return !!e && isListed(storeOf(e.kind)[e.id]); };
 const tmdbDetails = (type, id) => tmdb(`/${type}/${id}`, { append_to_response: type === "tv" ? "watch/providers,external_ids" : "watch/providers", language: navigator.language || "en-US" });
 const streamingOn = d => (((d["watch/providers"] || {}).results || {})[region()]?.flatrate || []);
 function pickServiceFrom(d) {
@@ -1196,12 +1227,15 @@ function pickServiceFrom(d) {
   return ex.prov !== "All" && names.includes(ex.prov) ? ex.prov : names[0] || "";
 }
 // Add a TMDB show/movie to the list. Returns { kind, id, title }.
-async function addFromTmdb(type, id, d) {
+// opts: { listed, fav } (default: put on Watching)
+async function addFromTmdb(type, id, d, opts = { listed: true }) {
   d = d || await tmdbDetails(type, id);
   const title = d.title || d.name, year = (d.release_date || d.first_air_date || "").slice(0, 4);
   if (type === "movie") {
     db.movies = db.movies || {};
-    db.movies[id] = { id: Number(id), title, year, poster: d.poster_path ? IMG + "w185" + d.poster_path : "", service: pickServiceFrom(d), watched: false, addedAt: Date.now() };
+    const cur = db.movies[id];
+    if (cur) { if (opts.listed) cur.listed = true; if (opts.fav) cur.fav = true; }
+    else db.movies[id] = { id: Number(id), title, year, poster: d.poster_path ? IMG + "w185" + d.poster_path : "", service: pickServiceFrom(d), watched: false, addedAt: Date.now(), listed: !!opts.listed, fav: !!opts.fav };
     saveDb();
     return { kind: "movie", id: Number(id), title };
   }
@@ -1209,8 +1243,8 @@ async function addFromTmdb(type, id, d) {
   if (!mazeId) throw new Error("notfound");
   if (!db.shows[mazeId]) {
     const data = await fetchShow(mazeId);
-    db.shows[mazeId] = { id: mazeId, watched: {}, addedAt: Date.now(), ...data, service: pickServiceFrom(d) || data.defaultService };
-  }
+    db.shows[mazeId] = { id: mazeId, watched: {}, addedAt: Date.now(), ...data, service: pickServiceFrom(d) || data.defaultService, listed: !!opts.listed, fav: !!opts.fav };
+  } else { if (opts.listed) db.shows[mazeId].listed = true; if (opts.fav) db.shows[mazeId].fav = true; }
   db.shows[mazeId].tmdbId = Number(id);
   saveDb();
   return { kind: "show", id: mazeId, title };
@@ -1277,21 +1311,24 @@ async function openExploreItem(type, id) {
     ${d.overview ? `<p class="overview">${esc(d.overview)}</p>` : ""}
     <div id="itemErr"></div>
     ${type === "tv"
-      ? (show ? `<button class="btn" data-a="open">Open in My Shows</button>` : `<button class="btn" data-a="addtv">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add to My Shows</button><button class="btn ghost" data-a="profile">See full profile</button>`)
+      ? (show ? (isListed(show) ? "" : `<button class="btn" data-a="listtv">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add to Watching</button>`) + `<button class="btn ${isListed(show) ? "" : "ghost"}" data-a="open">Open show page</button>`
+              : `<button class="btn" data-a="addtv">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add to Watching</button><button class="btn ghost" data-a="profile">See full profile</button>`)
         + `<button class="btn ghost fav-toggle ${show && show.fav ? "on" : ""}" data-a="favtv">${ICON.heart.replace("<svg", '<svg width="18" height="18"')} ${show && show.fav ? "Remove from favorites" : "Add to favorites"}</button>`
-      : movie ? `<button class="btn ghost fav-toggle ${movie.fav ? "on" : ""}" data-a="fav">${ICON.heart.replace("<svg", '<svg width="18" height="18"')} ${movie.fav ? "Remove from favorites" : "Add to favorites"}</button><button class="btn ghost" data-a="toggle">${movie.watched ? "Mark as not watched" : "Mark as watched"}</button><button class="btn danger" data-a="rmmovie">Remove from my movies</button>`
-              : `<button class="btn" data-a="addmovie">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add to my movies</button><button class="btn ghost fav-toggle" data-a="addmoviefav">${ICON.heart.replace("<svg", '<svg width="18" height="18"')} Add to favorites</button>`}`;
+      : movie ? `${isListed(movie) ? "" : `<button class="btn" data-a="listmovie">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add to Watching</button>`}<button class="btn ghost fav-toggle ${movie.fav ? "on" : ""}" data-a="fav">${ICON.heart.replace("<svg", '<svg width="18" height="18"')} ${movie.fav ? "Remove from favorites" : "Add to favorites"}</button><button class="btn ghost" data-a="toggle">${movie.watched ? "Mark as not watched" : "Mark as watched"}</button>${isListed(movie) ? `<button class="btn danger" data-a="rmmovie">Remove from Watching</button>` : ""}`
+              : `<button class="btn" data-a="addmovie">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add to Watching</button><button class="btn ghost fav-toggle" data-a="addmoviefav">${ICON.heart.replace("<svg", '<svg width="18" height="18"')} Add to favorites</button>`}`;
   const btn = a => content.querySelector(`[data-a="${a}"]`);
   btn("open") && (btn("open").onclick = () => { closeSheet(); go("/show/" + show.id); });
-  btn("fav") && (btn("fav").onclick = () => { movie.fav = !movie.fav; saveDb(); closeSheet(); refresh(); favToast("movie", id); });
+  btn("fav") && (btn("fav").onclick = () => { closeSheet(); setFav("movie", id, !movie.fav); });
+  btn("listmovie") && (btn("listmovie").onclick = () => { closeSheet(); addToWatching("movie", id); });
+  btn("listtv") && (btn("listtv").onclick = () => { closeSheet(); addToWatching("show", show.id); });
   btn("addmoviefav") && (btn("addmoviefav").onclick = async () => {
-    await addFromTmdb("movie", id, d); db.movies[id].fav = true; saveDb();
-    closeSheet(); refresh(); favToast("movie", id, true);
+    await addFromTmdb("movie", id, d, { fav: true });
+    closeSheet(); refresh(); favToast("movie", id);
   });
   btn("favtv") && (btn("favtv").onclick = async () => {
-    if (show) { show.fav = !show.fav; saveDb(); closeSheet(); refresh(); return favToast("show", show.id); }
+    if (show) { closeSheet(); return setFav("show", show.id, !show.fav); }
     const b = btn("favtv"); b.disabled = true; b.lastChild.textContent = " Adding…";
-    try { const added = await addFromTmdb("tv", id, d); db.shows[added.id].fav = true; saveDb(); closeSheet(); refresh(); favToast("show", added.id, true); }
+    try { const added = await addFromTmdb("tv", id, d, { fav: true }); closeSheet(); refresh(); favToast("show", added.id); }
     catch (e) { b.disabled = false; b.lastChild.textContent = " Add to favorites"; content.querySelector("#itemErr").innerHTML = `<div class="err">${netProblem(e)}</div>`; }
   });
   btn("profile") && (btn("profile").onclick = async () => {
@@ -1303,7 +1340,7 @@ async function openExploreItem(type, id) {
   btn("rmmovie") && (btn("rmmovie").onclick = () => { closeSheet(); removeItem("movie", id); });
   btn("addmovie") && (btn("addmovie").onclick = async () => {
     await addFromTmdb("movie", id, d);
-    closeSheet(); refresh(); toast(`Added ${title} to your movies.`);
+    closeSheet(); refresh(); toast(`Added ${title} to Watching.`);
   });
   btn("addtv") && (btn("addtv").onclick = async () => {
     const b = btn("addtv"); b.disabled = true; b.textContent = "Adding…";
@@ -1311,8 +1348,8 @@ async function openExploreItem(type, id) {
       const added = await addFromTmdb("tv", id, d);
       closeSheet(); go("/show/" + added.id);
     } catch (e) {
-      b.disabled = false; b.innerHTML = "Add to My Shows";
-      content.querySelector("#itemErr").innerHTML = `<div class="err">${e.message === "notfound" ? "<b>Couldn't find this show's episode list.</b><p>Try adding it from the search on the My Shows tab.</p>" : netProblem(e)}</div>`;
+      b.disabled = false; b.innerHTML = "Add to Watching";
+      content.querySelector("#itemErr").innerHTML = `<div class="err">${e.message === "notfound" ? "<b>Couldn't find this show's episode list.</b><p>Try adding it with Add show on the Watching tab.</p>" : netProblem(e)}</div>`;
     }
   });
 }
@@ -1320,14 +1357,14 @@ async function toggleStar(type, it) {
   const key = type + "-" + it.id;
   if (starring.has(key)) return;
   const entry = libraryEntry(type, it);
-  if (entry) return removeItem(entry.kind, entry.id);
+  if (entry) return isListed(storeOf(entry.kind)[entry.id]) ? removeItem(entry.kind, entry.id) : addToWatching(entry.kind, entry.id);
   const title = it.title || it.name;
   starring.add(key); drawExploreGrid();
   try {
     await addFromTmdb(type, it.id);
-    toast(`Added ${title}.`);
+    toast(`Added ${title} to Watching.`);
   } catch (e) {
-    toast(e.message === "notfound" ? `Couldn't find episode info for ${title}. Try Add show on My Shows.` : `Couldn't add ${title}. Check your connection.`);
+    toast(e.message === "notfound" ? `Couldn't find episode info for ${title}. Try Add show on the Watching tab.` : `Couldn't add ${title}. Check your connection.`);
   }
   starring.delete(key); drawExploreGrid();
 }
@@ -1340,15 +1377,11 @@ async function toggleHeartTmdb(type, it) {
   const key = type + "-" + it.id;
   if (hearting.has(key) || starring.has(key)) return;
   const e = libraryEntry(type, it);
-  if (e) {
-    const item = e.kind === "show" ? db.shows[e.id] : db.movies[e.id];
-    item.fav = !item.fav; saveDb(); drawExploreGrid(); return favToast(e.kind, e.id);
-  }
+  if (e) return setFav(e.kind, e.id, !storeOf(e.kind)[e.id].fav);
   hearting.add(key); drawExploreGrid();
   try {
-    const added = await addFromTmdb(type, it.id);
-    (added.kind === "show" ? db.shows[added.id] : db.movies[added.id]).fav = true; saveDb();
-    favToast(added.kind, added.id, true);
+    const added = await addFromTmdb(type, it.id, undefined, { fav: true });
+    favToast(added.kind, added.id);
   } catch (err) {
     toast(err.message === "notfound" ? `Couldn't find episode info for ${it.title || it.name}.` : `Couldn't add ${it.title || it.name}. Check your connection.`);
   }
@@ -1386,6 +1419,7 @@ function renderShow(id) {
     <header class="bar">
       <button class="icon-btn" id="back" aria-label="Back">${ICON.back}</button>
       <h1>${esc(show.name)}</h1>
+      <button class="icon-btn star-btn ${isListed(show) ? "on" : ""}" id="listBtn" aria-pressed="${isListed(show)}" aria-label="On Watching list">${ICON.star}</button>
       <button class="icon-btn fav-btn ${show.fav ? "on" : ""}" id="favBtn" aria-pressed="${!!show.fav}" aria-label="Favorite">${ICON.heart}</button>
       <button class="icon-btn" id="more" aria-label="Show options">${ICON.more}</button>
     </header>
@@ -1407,6 +1441,7 @@ function renderShow(id) {
     ${show.episodes.length ? "" : `<p class="empty">No episode info listed yet.</p>`}
     <div id="seasons">${[...seasons.entries()].map(([n, eps]) => seasonHtml(show, n, eps, open.has(n))).join("")}</div>
     <div class="bottom-actions">
+      ${isListed(show) ? "" : `<p class="hint notlisted">This show is in your Favorites but not on your Watching list. Tap ☆ at the top to add it.</p>`}
       <button class="btn" id="addAnother">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add another show</button>
       <button class="btn ghost" id="viewAll">View all shows</button>
     </div>
@@ -1416,11 +1451,8 @@ function renderShow(id) {
   $("#back").onclick = goBack;
   bindSummary();
   $("#more").onclick = () => showMenu(id);
-  $("#favBtn").onclick = () => {
-    show.fav = !show.fav; saveDb();
-    $("#favBtn").classList.toggle("on", show.fav); $("#favBtn").setAttribute("aria-pressed", show.fav);
-    favToast("show", id);
-  };
+  $("#favBtn").onclick = () => setFav("show", id, !show.fav);
+  $("#listBtn").onclick = () => isListed(show) ? removeItem("show", id) : addToWatching("show", id);
   const svc = $("#svc");
   const setService = v => {
     v = v.trim();
@@ -1632,6 +1664,7 @@ function mergeLocalInto(cloud) {
     out.shows[id].watched = { ...(sh.watched || {}), ...(out.shows[id].watched || {}) };
     if (!out.shows[id].service && sh.service) out.shows[id].service = sh.service;
     if (sh.fav) out.shows[id].fav = true;
+    if (sh.listed !== false) delete out.shows[id].listed; // on Watching on either device -> on Watching
     if (sh.favCats) out.shows[id].favCats = [...new Set([...(out.shows[id].favCats || []), ...sh.favCats])];
   }
   for (const [id, m] of Object.entries(local.movies)) {
