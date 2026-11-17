@@ -166,6 +166,18 @@ a{color:var(--accent)}
 .linkish{color:var(--accent);font-weight:600;padding:6px;font-size:15px}
 .err.okmsg{color:var(--good)}
 .sheet h3+p{margin-top:-4px}
+.heart-mark{display:inline-flex;vertical-align:-2px;margin-left:6px;color:#e0465a}
+.heart-mark svg{width:15px;height:15px;fill:currentColor;stroke:currentColor}
+.pill.fav{background:color-mix(in srgb,#e0465a 16%,transparent);color:#e0465a}
+.fav-btn svg{fill:none;stroke:currentColor}
+.fav-btn.on{color:#e0465a}
+.fav-btn.on svg{fill:currentColor}
+.fav-toggle svg{fill:none;stroke:currentColor}
+.fav-toggle.on{color:#e0465a}
+.fav-toggle.on svg{fill:currentColor}
+.section-label.fav-label{display:flex;align-items:center;gap:6px}
+.section-label .pick{margin-left:auto;text-transform:none;letter-spacing:0;height:30px;font-size:13px;color:var(--text)}
+.pickep{font-size:16px;margin:6px 0 8px}
 .count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;align-self:flex-start;padding-top:2px}
 .empty{text-align:center;color:var(--muted);padding:56px 16px}
 .empty h2{color:var(--text);font-size:20px;margin-bottom:6px}
@@ -324,6 +336,8 @@ const ICON = {
   back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
   more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  heart: '<svg viewBox="0 0 24 24" stroke-width="2" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.2-9.4C1.6 7.6 3.9 4.5 7.2 4.5c2 0 3.6 1.1 4.8 2.9 1.2-1.8 2.8-2.9 4.8-2.9 3.3 0 5.6 3.1 4.4 6.6-1.7 4.8-9.2 9.4-9.2 9.4z"/></svg>',
+  dice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2" fill="currentColor"/><circle cx="15" cy="15" r="1.2" fill="currentColor"/><circle cx="15" cy="9" r="1.2" fill="currentColor"/><circle cx="9" cy="15" r="1.2" fill="currentColor"/></svg>',
   star: '<svg viewBox="0 0 24 24" stroke-width="2" stroke-linejoin="round"><path d="M12 3.3l2.7 5.5 6 .9-4.35 4.2 1.03 6L12 17.05 6.62 19.9l1.03-6L3.3 9.7l6-.9z"/></svg>',
   chev: '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>'
 };
@@ -431,10 +445,16 @@ function renderHome() {
   const withStats = visible.map(s => ({ s, st: stats(s) }));
   const byName = (a, b) => (a.s.name || "").localeCompare(b.s.name || "");
   const bySoonest = (a, b) => (a.st.upcoming?.stamp || a.st.upcoming?.date || "~").localeCompare(b.st.upcoming?.stamp || b.st.upcoming?.date || "~") || byName(a, b);
+  const inProgress = x => x.st.everWatched && x.st.next;
+  // Favorites live in their own section, except while you're partway through new episodes.
+  const favShows = withStats.filter(x => x.s.fav && !inProgress(x)).sort(byName);
+  const favMovies = visibleMovies.filter(m => m.fav).sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+  const otherMovies = visibleMovies.filter(m => !m.fav);
+  const favCount = favShows.length + favMovies.length;
   const watching = withStats.filter(x => x.st.everWatched && x.st.next)
     .sort((a, b) => (b.s.lastWatchedAt || 0) - (a.s.lastWatchedAt || 0) || byName(a, b));
-  const caught = withStats.filter(x => x.st.everWatched && !x.st.next).sort(bySoonest);
-  const notStarted = withStats.filter(x => !x.st.everWatched).sort(byName);
+  const caught = withStats.filter(x => x.st.everWatched && !x.st.next && !x.s.fav).sort(bySoonest);
+  const notStarted = withStats.filter(x => !x.st.everWatched && !x.s.fav).sort(byName);
   const textView = settings().view === "text";
   const section = (title, hint, list) => list.length
     ? `<div class="section-label ${textView ? "with-cols" : ""}">${title} <span class="n">${list.length}</span>${textView ? `<span class="cols"><span>Left</span><span>New ep</span></span>` : ""}</div>${hint && !textView ? `<p class="hint">${hint}</p>` : ""}
@@ -459,9 +479,14 @@ function renderHome() {
         ${viewToggle}
       </div>
       ${section("Watching", "", watching)}
+      ${favCount ? `<div class="section-label fav-label">Favorites <span class="n">${favCount}</span>
+          <button class="btn small ghost pick" id="pickOne">${ICON.dice.replace("<svg", '<svg width="16" height="16"')} Pick one for me</button></div>
+        ${!textView ? `<p class="hint">Old favorites for when you want something easy to rewatch.</p>` : ""}
+        ${textView ? `<div class="rows">${favShows.map(rowHtml).join("")}${favMovies.map(movieRowHtml).join("")}</div>`
+                   : `<div class="list">${favShows.map(cardHtml).join("")}${favMovies.map(movieCardHtml).join("")}</div>`}` : ""}
       ${section("Caught up", "", caught)}
       ${section("Haven't started", "Saved for later. Check off an episode and it moves up to Watching.", notStarted)}
-      ${visibleMovies.length ? `<div class="section-label">Movies <span class="n">${visibleMovies.filter(m => !m.watched).length || "all watched"}</span></div>${textView ? `<div class="rows">${visibleMovies.map(movieRowHtml).join("")}</div>` : `<div class="list">${visibleMovies.map(movieCardHtml).join("")}</div>`}` : ""}
+      ${otherMovies.length ? `<div class="section-label">Movies <span class="n">${otherMovies.filter(m => !m.watched).length || "all watched"}</span></div>${textView ? `<div class="rows">${otherMovies.map(movieRowHtml).join("")}</div>` : `<div class="list">${otherMovies.map(movieCardHtml).join("")}</div>`}` : ""}
     ` : `
       <div class="empty">
         <h2>No shows yet</h2>
@@ -473,6 +498,7 @@ function renderHome() {
   $("#addBtn").onclick = () => go("/add");
   $("#addBtn2") && ($("#addBtn2").onclick = () => go("/add"));
   $("#menuBtn").onclick = openMainMenu;
+  if ($("#pickOne")) $("#pickOne").onclick = () => pickFavorite(filter);
   if ($("#bannerGo")) {
     $("#bannerGo").onclick = () => openAccountSheet("register");
     $("#bannerX").onclick = () => { settings().hideAcctBanner = true; saveDb(); renderHome(); };
@@ -505,7 +531,10 @@ function airLabel(e) {
 }
 function cardHtml({ s, st }) {
   const started = st.everWatched;
-  const counts = started
+  const nSeasons = new Set(regularEps(s).map(e => e.s)).size;
+  const counts = s.fav && !(started && st.next)
+    ? `<span class="pill">${nSeasons} season${nSeasons === 1 ? "" : "s"} · ${st.total} eps</span>`
+    : started
     ? `<span class="pill seen">✓ ${st.seen} seen</span>` + (st.remaining ? `<span class="pill left">${st.remaining} left</span>` : `<span class="pill">all caught up</span>`)
     : `<span class="pill left">${st.total} episode${st.total === 1 ? "" : "s"}</span>`;
   const nextUp = started && st.next ? `<div class="next">Up next: <b>${esc(code(st.next))}</b> · ${esc(st.next.name)}</div>` : "";
@@ -516,7 +545,7 @@ function cardHtml({ s, st }) {
   return `<div class="card" data-show="${s.id}" role="button" tabindex="0">
     ${posterHtml(s.image, s.name)}
     <div class="meta">
-      <div class="name">${esc(s.name)}</div>
+      <div class="name">${esc(s.name)}${s.fav ? `<span class="heart-mark" aria-label="Favorite">${ICON.heart}</span>` : ""}</div>
       <span class="svc ${s.service ? "" : "none"}">${serviceIcon(s.service, 18)}${esc(s.service || "No service set")}</span>
       <div class="pills">${counts}</div>
       ${nextUp}
@@ -525,6 +554,32 @@ function cardHtml({ s, st }) {
     </div>
     ${starBtn(true, s.name)}
   </div>`;
+}
+// "Pick one for me": a random episode of a favorite show (or a favorite movie).
+function pickFavorite(svcFilter) {
+  const ok = x => svcFilter === "All" || (x.service || "No service set") === svcFilter;
+  const choices = [
+    ...Object.values(db.shows).filter(s => s.fav && ok(s)).map(s => ({ kind: "show", s, eps: regularEps(s).filter(aired) })).filter(c => c.eps.length),
+    ...Object.values(db.movies || {}).filter(m => m.fav && ok(m)).map(m => ({ kind: "movie", m }))
+  ];
+  if (!choices.length) return toast("Your favorites don't have episode info yet. Try again in a moment.");
+  const c = choices[Math.floor(Math.random() * choices.length)];
+  const html = c.kind === "show" ? (() => {
+    const e = c.eps[Math.floor(Math.random() * c.eps.length)];
+    return `<div class="detail">${posterHtml(c.s.image, c.s.name)}<div><p class="sub">How about…</p><h3>${esc(c.s.name)}</h3>
+      <div class="pickep"><b>${esc(code(e))}</b> · ${esc(e.name)}</div>
+      <span class="svc ${c.s.service ? "" : "none"}">${serviceIcon(c.s.service, 18)}${esc(c.s.service || "No service set")}</span></div></div>
+      <button class="btn" data-a="again">${ICON.dice.replace("<svg", '<svg width="18" height="18"')} Pick another</button>
+      <button class="btn ghost" data-a="open">Open ${esc(c.s.name)}</button>`;
+  })() : `<div class="detail">${posterHtml(c.m.poster, c.m.title)}<div><p class="sub">How about…</p><h3>${esc(c.m.title)}</h3>
+      <div class="pickep">${esc(c.m.year || "")} · Movie</div>
+      <span class="svc ${c.m.service ? "" : "none"}">${serviceIcon(c.m.service, 18)}${esc(c.m.service || "No service set")}</span></div></div>
+      <button class="btn" data-a="again">${ICON.dice.replace("<svg", '<svg width="18" height="18"')} Pick another</button>`;
+  sheet(`<div class="content">${html}</div>`, (m, close) => {
+    m.querySelector('[data-a="again"]').onclick = () => { close(); pickFavorite(svcFilter); };
+    const o = m.querySelector('[data-a="open"]');
+    if (o) o.onclick = () => { close(); go("/show/" + c.s.id); };
+  }, "Close");
 }
 let refreshing = false, refreshAgain = false;
 async function backgroundRefresh() {
@@ -687,7 +742,7 @@ function rowHtml({ s, st }) {
   const when = st.upcoming ? (shortDate(st.upcoming) || "TBA") : (s.status === "Ended" ? "Ended" : "—");
   return `<div class="row" data-show="${s.id}" role="button" tabindex="0">
     ${serviceIcon(s.service, 18)}
-    <span class="rn">${esc(s.name)}${nextCode}</span>
+    <span class="rn">${esc(s.name)}${s.fav ? `<span class="heart-mark" aria-label="Favorite">${ICON.heart}</span>` : ""}${nextCode}</span>
     <span class="rs">${status}</span>
     <span class="rw ${st.upcoming ? "soon" : ""}" title="Next new episode">${esc(when)}</span>
     ${starBtn(true, s.name, "sm")}
@@ -696,7 +751,7 @@ function rowHtml({ s, st }) {
 function movieRowHtml(m) {
   return `<div class="row ${m.watched ? "seen" : ""}" data-movie="${m.id}" role="button" tabindex="0">
     ${serviceIcon(m.service, 18)}
-    <span class="rn">${esc(m.title)}<span class="code">${esc(m.year || "")}</span></span>
+    <span class="rn">${esc(m.title)}${m.fav ? `<span class="heart-mark" aria-label="Favorite">${ICON.heart}</span>` : ""}<span class="code">${esc(m.year || "")}</span></span>
     <button class="check sm" aria-label="Watched">${ICON.check}</button>
     ${starBtn(true, m.title, "sm")}
   </div>`;
@@ -705,7 +760,7 @@ function movieCardHtml(m) {
   return `<div class="card movie ${m.watched ? "seen" : ""}" data-movie="${m.id}" role="button" tabindex="0">
     ${posterHtml(m.poster, m.title)}
     <div class="meta">
-      <div class="name">${esc(m.title)}</div>
+      <div class="name">${esc(m.title)}${m.fav ? `<span class="heart-mark" aria-label="Favorite">${ICON.heart}</span>` : ""}</div>
       <span class="svc ${m.service ? "" : "none"}">${serviceIcon(m.service, 18)}${esc(m.service || "No service set")}</span>
       <div class="next">${[m.year, "Movie"].filter(Boolean).map(esc).join(" · ")}${m.watched ? " · <b>Watched</b>" : ""}</div>
     </div>
@@ -957,10 +1012,11 @@ async function openExploreItem(type, id) {
     <div id="itemErr"></div>
     ${type === "tv"
       ? show ? `<button class="btn" data-a="open">Open in My Shows</button>` : `<button class="btn" data-a="addtv">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add to My Shows</button>`
-      : movie ? `<button class="btn ghost" data-a="toggle">${movie.watched ? "Mark as not watched" : "Mark as watched"}</button><button class="btn danger" data-a="rmmovie">Remove from my movies</button>`
+      : movie ? `<button class="btn ghost fav-toggle ${movie.fav ? "on" : ""}" data-a="fav">${ICON.heart.replace("<svg", '<svg width="18" height="18"')} ${movie.fav ? "Remove from favorites" : "Add to favorites"}</button><button class="btn ghost" data-a="toggle">${movie.watched ? "Mark as not watched" : "Mark as watched"}</button><button class="btn danger" data-a="rmmovie">Remove from my movies</button>`
               : `<button class="btn" data-a="addmovie">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add to my movies</button>`}`;
   const btn = a => content.querySelector(`[data-a="${a}"]`);
   btn("open") && (btn("open").onclick = () => { closeSheet(); go("/show/" + show.id); });
+  btn("fav") && (btn("fav").onclick = () => { movie.fav = !movie.fav; saveDb(); closeSheet(); refresh(); toast(movie.fav ? `${title} added to Favorites.` : `${title} removed from Favorites.`); });
   btn("toggle") && (btn("toggle").onclick = () => { movie.watched = !movie.watched; saveDb(); closeSheet(); render(); });
   btn("rmmovie") && (btn("rmmovie").onclick = () => { closeSheet(); removeItem("movie", id); });
   btn("addmovie") && (btn("addmovie").onclick = async () => {
@@ -1024,6 +1080,7 @@ function renderShow(id) {
     <header class="bar">
       <button class="icon-btn" id="back" aria-label="Back">${ICON.back}</button>
       <h1>${esc(show.name)}</h1>
+      <button class="icon-btn fav-btn ${show.fav ? "on" : ""}" id="favBtn" aria-pressed="${!!show.fav}" aria-label="Favorite">${ICON.heart}</button>
       <button class="icon-btn" id="more" aria-label="Show options">${ICON.more}</button>
     </header>
     <div class="hero">
@@ -1050,6 +1107,11 @@ function renderShow(id) {
   $("#viewAll").onclick = () => go("/");
   $("#back").onclick = () => go("/");
   $("#more").onclick = () => showMenu(id);
+  $("#favBtn").onclick = () => {
+    show.fav = !show.fav; saveDb();
+    $("#favBtn").classList.toggle("on", show.fav); $("#favBtn").setAttribute("aria-pressed", show.fav);
+    toast(show.fav ? `${show.name} added to Favorites.` : `${show.name} removed from Favorites.`);
+  };
   const svc = $("#svc");
   svc.onchange = svc.onblur = () => {
     const v = svc.value.trim();
