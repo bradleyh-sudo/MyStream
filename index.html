@@ -196,6 +196,25 @@ a{color:var(--accent)}
 .svc-other{display:flex;gap:8px;margin-top:8px}
 .svc-other[hidden]{display:none}
 .svc-other input{flex:1;min-width:0;height:36px;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:0 10px;font-size:16px}
+.tile .heart{position:absolute;right:5px;bottom:5px;width:34px;height:34px;background:rgba(0,0,0,.55);color:#fff}
+.tile .heart.on{color:#ff5c72}
+.chip .cn{opacity:.6;font-weight:500;margin-left:2px}
+.chip.add-cat{background:transparent;border:1px dashed var(--line);color:var(--muted)}
+.favrows .row{align-items:center;padding:8px 10px;gap:12px;min-height:76px}
+.poster.mini{width:40px;height:58px;border-radius:6px;font-size:16px}
+.fbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.fbody .rn{flex:none}
+.fsub{display:flex;align-items:center;gap:5px;font-size:13px;color:var(--muted);min-width:0;white-space:nowrap;overflow:hidden}
+.fsub .dot{opacity:.6}
+.fcats{display:flex;flex-wrap:wrap;gap:5px;align-items:center}
+.catpill{font-size:12px;font-weight:650;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,#e0465a 14%,transparent);color:#c23a4d}
+.catbtn{font-size:12px;font-weight:600;color:var(--accent);padding:2px 4px}
+.catlist{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.catopt{display:flex;align-items:center;gap:12px;padding:0 6px 0 14px;min-height:48px;border-bottom:1px solid var(--line);font-size:16px;cursor:pointer}
+.catopt:last-child{border-bottom:0}
+.catopt input{width:20px;height:20px;accent-color:var(--accent)}
+.catopt span{flex:1}
+.catdel{color:var(--muted);width:36px;height:36px;font-size:14px}
 .count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;align-self:flex-start;padding-top:2px}
 .empty{text-align:center;color:var(--muted);padding:56px 16px}
 .empty h2{color:var(--text);font-size:20px;margin-bottom:6px}
@@ -254,6 +273,7 @@ a{color:var(--accent)}
 <div class="wrap" id="app"></div>
 <nav id="tabs" class="tabs" hidden>
   <button data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></svg>My Shows</button>
+  <button data-tab="favorites"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.2-9.4C1.6 7.6 3.9 4.5 7.2 4.5c2 0 3.6 1.1 4.8 2.9 1.2-1.8 2.8-2.9 4.8-2.9 3.3 0 5.6 3.1 4.4 6.6-1.7 4.8-9.2 9.4-9.2 9.4z"/></svg>Favorites</button>
   <button data-tab="explore"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>Explore</button>
 </nav>
 <div id="overlay"></div>
@@ -404,6 +424,7 @@ function removeItem(kind, id) {
 function refresh() {
   const h = location.hash.replace(/^#\/?/, "");
   if (h === "explore") drawExploreGrid();
+  else if (h === "favorites") renderFavorites();
   else if (h === "add") { if (lastResults) drawResults(lastResults); }
   else if (!h || h === "/") renderHome();
   else render();
@@ -443,7 +464,7 @@ const app = $("#app");
 let filter = "All";
 let openSeasons = {}; // showId -> Set of open season numbers
 window.addEventListener("hashchange", render);
-$("#tabs").querySelectorAll("button").forEach(b => b.onclick = () => go(b.dataset.tab === "home" ? "/" : "/explore"));
+$("#tabs").querySelectorAll("button").forEach(b => b.onclick = () => go(b.dataset.tab === "home" ? "/" : "/" + b.dataset.tab));
 function go(hash) { location.hash = hash; }
 let currentRoute = null, prevRoute = null;
 function render() {
@@ -451,12 +472,13 @@ function render() {
   if (h !== currentRoute) { prevRoute = currentRoute; currentRoute = h; }
   window.scrollTo(0, 0);
   const showMatch = h.match(/^show\/(\d+)$/);
-  const tab = h === "explore" ? "explore" : h === "add" || showMatch ? null : "home";
+  const tab = h === "explore" || h === "favorites" ? h : h === "add" || showMatch ? null : "home";
   $("#tabs").hidden = !tab;
   document.body.classList.toggle("has-tabs", !!tab);
   $("#tabs").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
   if (h === "add") return renderAdd();
   if (h === "explore") return renderExplore();
+  if (h === "favorites") return renderFavorites();
   const m = h.match(/^show\/(\d+)$/);
   if (m && db.shows[m[1]]) return renderShow(m[1]);
   if (m) return renderPreview(m[1]);
@@ -465,7 +487,7 @@ function render() {
 // Back from a show page returns to search/explore if that's where you came from.
 let keepSearch = false;
 function goBack() {
-  if (prevRoute === "add" || prevRoute === "explore") { keepSearch = true; history.back(); } else go("/");
+  if (prevRoute === "add" || prevRoute === "explore" || prevRoute === "favorites") { keepSearch = true; history.back(); } else go("/");
 }
 
 /* ---------- home ---------- */
@@ -481,16 +503,11 @@ function renderHome() {
   const withStats = visible.map(s => ({ s, st: stats(s) }));
   const byName = (a, b) => (a.s.name || "").localeCompare(b.s.name || "");
   const bySoonest = (a, b) => (a.st.upcoming?.stamp || a.st.upcoming?.date || "~").localeCompare(b.st.upcoming?.stamp || b.st.upcoming?.date || "~") || byName(a, b);
-  const inProgress = x => x.st.everWatched && x.st.next;
-  // Favorites live in their own section, except while you're partway through new episodes.
-  const favShows = withStats.filter(x => x.s.fav && !inProgress(x)).sort(byName);
-  const favMovies = visibleMovies.filter(m => m.fav).sort((a, b) => (a.title || "").localeCompare(b.title || ""));
-  const otherMovies = visibleMovies.filter(m => !m.fav);
-  const favCount = favShows.length + favMovies.length;
+  const otherMovies = visibleMovies;
   const watching = withStats.filter(x => x.st.everWatched && x.st.next)
     .sort((a, b) => (b.s.lastWatchedAt || 0) - (a.s.lastWatchedAt || 0) || byName(a, b));
-  const caught = withStats.filter(x => x.st.everWatched && !x.st.next && !x.s.fav).sort(bySoonest);
-  const notStarted = withStats.filter(x => !x.st.everWatched && !x.s.fav).sort(byName);
+  const caught = withStats.filter(x => x.st.everWatched && !x.st.next).sort(bySoonest);
+  const notStarted = withStats.filter(x => !x.st.everWatched).sort(byName);
   const textView = settings().view === "text";
   const section = (title, hint, list) => list.length
     ? `<div class="section-label ${textView ? "with-cols" : ""}">${title} <span class="n">${list.length}</span>${textView ? `<span class="cols"><span>Left</span><span>New ep</span></span>` : ""}</div>${hint && !textView ? `<p class="hint">${hint}</p>` : ""}
@@ -515,11 +532,6 @@ function renderHome() {
         ${viewToggle}
       </div>
       ${section("Watching", "", watching)}
-      ${favCount ? `<div class="section-label fav-label">Favorites <span class="n">${favCount}</span>
-          <button class="btn small ghost pick" id="pickOne">${ICON.dice.replace("<svg", '<svg width="16" height="16"')} Pick one for me</button></div>
-        ${!textView ? `<p class="hint">Old favorites for when you want something easy to rewatch.</p>` : ""}
-        ${textView ? `<div class="rows">${favShows.map(rowHtml).join("")}${favMovies.map(movieRowHtml).join("")}</div>`
-                   : `<div class="list">${favShows.map(cardHtml).join("")}${favMovies.map(movieCardHtml).join("")}</div>`}` : ""}
       ${section("Caught up", "", caught)}
       ${section("Haven't started", "Saved for later. Check off an episode and it moves up to Watching.", notStarted)}
       ${otherMovies.length ? `<div class="section-label">Movies <span class="n">${otherMovies.filter(m => !m.watched).length || "all watched"}</span></div>${textView ? `<div class="rows">${otherMovies.map(movieRowHtml).join("")}</div>` : `<div class="list">${otherMovies.map(movieCardHtml).join("")}</div>`}` : ""}
@@ -534,7 +546,6 @@ function renderHome() {
   $("#addBtn").onclick = () => go("/add");
   $("#addBtn2") && ($("#addBtn2").onclick = () => go("/add"));
   $("#menuBtn").onclick = openMainMenu;
-  if ($("#pickOne")) $("#pickOne").onclick = () => pickFavorite(filter);
   if ($("#bannerGo")) {
     $("#bannerGo").onclick = () => openAccountSheet("register");
     $("#bannerX").onclick = () => { settings().hideAcctBanner = true; saveDb(); renderHome(); };
@@ -568,9 +579,7 @@ function airLabel(e) {
 function cardHtml({ s, st }) {
   const started = st.everWatched;
   const nSeasons = new Set(regularEps(s).map(e => e.s)).size;
-  const counts = s.fav && !(started && st.next)
-    ? `<span class="pill">${nSeasons} season${nSeasons === 1 ? "" : "s"} · ${st.total} eps</span>`
-    : started
+  const counts = started
     ? `<span class="pill seen">✓ ${st.seen} seen</span>` + (st.remaining ? `<span class="pill left">${st.remaining} left</span>` : `<span class="pill">all caught up</span>`)
     : `<span class="pill left">${st.total} episode${st.total === 1 ? "" : "s"}</span>`;
   const nextUp = started && st.next ? `<div class="next">Up next: <b>${esc(code(st.next))}</b> · ${esc(st.next.name)}</div>` : "";
@@ -592,13 +601,13 @@ function cardHtml({ s, st }) {
   </div>`;
 }
 // "Pick one for me": a random episode of a favorite show (or a favorite movie).
-function pickFavorite(svcFilter) {
-  const ok = x => svcFilter === "All" || (x.service || "No service set") === svcFilter;
+function pickFavorite(cat = "All") {
+  const ok = x => cat === "All" || (x.favCats || []).includes(cat);
   const choices = [
     ...Object.values(db.shows).filter(s => s.fav && ok(s)).map(s => ({ kind: "show", s, eps: regularEps(s).filter(aired) })).filter(c => c.eps.length),
     ...Object.values(db.movies || {}).filter(m => m.fav && ok(m)).map(m => ({ kind: "movie", m }))
   ];
-  if (!choices.length) return toast("Your favorites don't have episode info yet. Try again in a moment.");
+  if (!choices.length) return toast(cat === "All" ? "Your favorites don't have episode info yet. Try again in a moment." : `Nothing in ${cat} yet.`);
   const c = choices[Math.floor(Math.random() * choices.length)];
   const html = c.kind === "show" ? (() => {
     const e = c.eps[Math.floor(Math.random() * c.eps.length)];
@@ -612,7 +621,7 @@ function pickFavorite(svcFilter) {
       <span class="svc ${c.m.service ? "" : "none"}">${serviceIcon(c.m.service, 18)}${esc(c.m.service || "No service set")}</span></div></div>
       <button class="btn" data-a="again">${ICON.dice.replace("<svg", '<svg width="18" height="18"')} Pick another</button>`;
   sheet(`<div class="content">${html}</div>`, (m, close) => {
-    m.querySelector('[data-a="again"]').onclick = () => { close(); pickFavorite(svcFilter); };
+    m.querySelector('[data-a="again"]').onclick = () => { close(); pickFavorite(cat); };
     const o = m.querySelector('[data-a="open"]');
     if (o) o.onclick = () => { close(); go("/show/" + c.s.id); };
   }, "Close");
@@ -779,11 +788,137 @@ async function toggleShowFav(id) {
   id = Number(id);
   if (adding.has(id)) return;
   const s = db.shows[id];
-  if (s) { s.fav = !s.fav; saveDb(); refresh(); return toast(s.fav ? `${s.name} added to Favorites.` : `${s.name} removed from Favorites.`); }
+  if (s) { s.fav = !s.fav; saveDb(); refresh(); return favToast("show", id); }
   adding.add(id); refresh();
-  try { const added = await addTvMaze(id, { fav: true }); toast(`${added.name} added to My Shows and Favorites.`); }
+  try { await addTvMaze(id, { fav: true }); favToast("show", id, true); }
   catch { toast("Couldn't add that show. Check your connection."); }
   adding.delete(id); refresh();
+}
+
+/* ---------- Favorites tab & categories ---------- */
+const DEFAULT_CATS = ["Rewatch", "Bedtime"];
+const favCategories = () => (db.favCategories = db.favCategories || DEFAULT_CATS.slice());
+let favFilter = "All";
+function favItem(kind, id) { return kind === "show" ? db.shows[id] : (db.movies || {})[id]; }
+function favToast(kind, id, alsoAdded) {
+  const it = favItem(kind, id); if (!it) return;
+  const name = it.name || it.title;
+  if (it.fav) toast(`${name} ${alsoAdded ? "added to your list and Favorites" : "added to Favorites"}.`, "Pick category", () => openCategorySheet(kind, id));
+  else toast(`${name} removed from Favorites.`);
+}
+function allFavorites() {
+  return [
+    ...Object.values(db.shows).filter(s => s.fav).map(s => ({ kind: "show", id: s.id, it: s, name: s.name })),
+    ...Object.values(db.movies || {}).filter(m => m.fav).map(m => ({ kind: "movie", id: m.id, it: m, name: m.title }))
+  ].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+}
+function renderFavorites() {
+  const favs = allFavorites();
+  const cats = favCategories();
+  if (favFilter !== "All" && favFilter !== "None" && !cats.includes(favFilter)) favFilter = "All";
+  const count = c => favs.filter(f => (f.it.favCats || []).includes(c)).length;
+  const none = favs.filter(f => !(f.it.favCats || []).length).length;
+  const shown = favs.filter(f => favFilter === "All" || (favFilter === "None" ? !(f.it.favCats || []).length : (f.it.favCats || []).includes(favFilter)));
+  app.innerHTML = `
+    <header class="bar">
+      <h1>Favorites</h1>
+      ${favs.length ? `<button class="btn" id="favPick">${ICON.dice.replace("<svg", '<svg width="18" height="18"')} Pick one</button>` : ""}
+    </header>
+    ${favs.length ? `
+      <div class="chips">
+        <button class="chip ${favFilter === "All" ? "on" : ""}" data-cat="All">All <span class="cn">${favs.length}</span></button>
+        ${cats.map(c => `<button class="chip ${favFilter === c ? "on" : ""}" data-cat="${esc(c)}">${esc(c)} <span class="cn">${count(c)}</span></button>`).join("")}
+        ${none && cats.length ? `<button class="chip ${favFilter === "None" ? "on" : ""}" data-cat="None">No category <span class="cn">${none}</span></button>` : ""}
+        <button class="chip add-cat" id="newCat" aria-label="New category">+ New</button>
+      </div>
+      ${shown.length ? `<div class="rows favrows">${shown.map(favRowHtml).join("")}</div>`
+        : `<p class="empty">Nothing in ${esc(favFilter === "None" ? "No category" : favFilter)} yet. Tap <b>Category</b> on a favorite to add it.</p>`}
+    ` : `
+      <div class="empty">
+        <h2>No favorites yet</h2>
+        <p>Tap the ♡ on any show or movie (on its page, in search results, or in Explore) to save it here for rewatching.</p>
+      </div>`}
+  `;
+  $("#favPick") && ($("#favPick").onclick = () => pickFavorite(favFilter === "None" ? "All" : favFilter));
+  app.querySelectorAll("[data-cat]").forEach(b => b.onclick = () => { favFilter = b.dataset.cat; renderFavorites(); });
+  $("#newCat") && ($("#newCat").onclick = () => newCategory(c => { favFilter = c; renderFavorites(); }));
+  app.querySelectorAll(".favrow").forEach(r => r.onclick = e => {
+    const { kind, id } = r.dataset;
+    if (e.target.closest("[data-heart]")) { favItem(kind, id).fav = false; saveDb(); renderFavorites();
+      return toast(`${favItem(kind, id).name || favItem(kind, id).title} removed from Favorites.`, "Undo", () => { favItem(kind, id).fav = true; saveDb(); refresh(); }); }
+    if (e.target.closest("[data-cats]")) return openCategorySheet(kind, id);
+    kind === "show" ? go("/show/" + id) : openExploreItem("movie", id);
+  });
+}
+function favRowHtml(f) {
+  const it = f.it, cats = it.favCats || [];
+  let sub;
+  if (f.kind === "show") {
+    const reg = regularEps(it);
+    const ns = new Set(reg.map(e => e.s)).size;
+    sub = reg.length ? `${ns} season${ns === 1 ? "" : "s"} · ${reg.length} eps` : "TV show";
+  } else sub = [it.year, "Movie"].filter(Boolean).join(" · ");
+  return `<div class="row favrow" data-kind="${f.kind}" data-id="${f.id}" role="button" tabindex="0">
+    ${posterHtml(f.kind === "show" ? it.image : it.poster, f.name, "poster mini")}
+    <div class="fbody">
+      <div class="rn">${esc(f.name)}</div>
+      <div class="fsub">${serviceIcon(it.service, 16)}<span>${esc(it.service || "No service")}</span><span class="dot">·</span><span>${esc(sub)}</span></div>
+      <div class="fcats">${cats.map(c => `<span class="catpill">${esc(c)}</span>`).join("")}<button class="catbtn" data-cats>${cats.length ? "Edit" : "+ Category"}</button></div>
+    </div>
+    ${heartBtn(true, f.name)}
+  </div>`;
+}
+function newCategory(done) {
+  sheet(`
+    <h3>New category</h3>
+    <form class="search" id="catForm" style="margin:0"><input id="catName" placeholder="e.g. Comfort, Background, Kids" maxlength="30" autocomplete="off"><button class="btn" type="submit">Add</button></form>
+  `, (m, close) => {
+    setTimeout(() => m.querySelector("#catName").focus(), 50);
+    m.querySelector("#catForm").onsubmit = e => {
+      e.preventDefault();
+      const v = m.querySelector("#catName").value.trim();
+      if (!v) return;
+      const cats = favCategories();
+      const existing = cats.find(c => c.toLowerCase() === v.toLowerCase());
+      if (!existing) { cats.push(v); saveDb(); }
+      close(); done && done(existing || v);
+    };
+  });
+}
+function openCategorySheet(kind, id) {
+  const it = favItem(kind, id); if (!it) return;
+  const name = it.name || it.title;
+  const draw = m => {
+    const cats = favCategories(), mine = it.favCats || [];
+    m.querySelector(".catlist").innerHTML = cats.map(c => `
+      <label class="catopt"><input type="checkbox" value="${esc(c)}" ${mine.includes(c) ? "checked" : ""}><span>${esc(c)}</span>
+        <button type="button" class="catdel" data-del="${esc(c)}" aria-label="Delete category ${esc(c)}">✕</button></label>`).join("");
+    m.querySelectorAll(".catopt input").forEach(cb => cb.onchange = () => {
+      const set = new Set(it.favCats || []);
+      cb.checked ? set.add(cb.value) : set.delete(cb.value);
+      it.favCats = favCategories().filter(c => set.has(c));
+      if (!it.fav && it.favCats.length) it.fav = true;
+      saveDb(); refresh();
+    });
+    m.querySelectorAll("[data-del]").forEach(b => b.onclick = e => {
+      e.preventDefault();
+      const c = b.dataset.del;
+      if (!confirm(`Delete the "${c}" category? Shows in it stay in Favorites.`)) return;
+      db.favCategories = favCategories().filter(x => x !== c);
+      for (const x of [...Object.values(db.shows), ...Object.values(db.movies || {})]) if (x.favCats) x.favCats = x.favCats.filter(y => y !== c);
+      saveDb(); draw(m); refresh();
+    });
+  };
+  sheet(`
+    <h3>Categories for ${esc(name)}</h3>
+    <p>Pick one or more.</p>
+    <div class="catlist"></div>
+    <button class="btn ghost" data-a="new">+ New category</button>
+  `, (m, close) => {
+    draw(m);
+    m.querySelector('[data-a="new"]').onclick = () => { close(); newCategory(c => {
+      it.favCats = [...new Set([...(it.favCats || []), c])]; it.fav = true; saveDb(); refresh(); openCategorySheet(kind, id); }); };
+  }, "Done");
 }
 
 /* ---------- show profile (preview for shows not in your list) ---------- */
@@ -845,7 +980,7 @@ async function renderPreview(id) {
   app.querySelectorAll(".season-head").forEach(h => h.onclick = () => h.parentElement.classList.toggle("open"));
   const add = async fav => {
     const b = fav ? $("#pvFav") : $("#pvAdd"); b.disabled = true; b.lastChild.textContent = " Adding…";
-    try { await addTvMaze(id, { fav }); toast(fav ? `${sh.name} added to My Shows and Favorites.` : `Added ${sh.name}.`); renderShow(id); window.scrollTo(0, 0); }
+    try { await addTvMaze(id, { fav }); fav ? favToast("show", id, true) : toast(`Added ${sh.name}.`); renderShow(id); window.scrollTo(0, 0); }
     catch { b.disabled = false; toast("Couldn't add that show. Check your connection."); renderPreview(id); }
   };
   $("#pvAdd").onclick = () => add(false);
@@ -1094,7 +1229,8 @@ function drawExploreGrid() {
     return `<div class="tile" data-i="${i}" role="button" tabindex="0" aria-label="${esc(title)}">
       <div class="art">${it.poster_path ? `<img src="${IMG}w342${esc(it.poster_path)}" alt="" loading="lazy">` : `<span>${esc(title.charAt(0))}</span>`}
         ${ex.sort === "popular" ? `<span class="rank">${i + 1}</span>` : ""}
-        ${starBtn(inLibrary(type, it), title, starring.has(type + "-" + it.id) ? "busy" : "")}</div>
+        ${starBtn(inLibrary(type, it), title, starring.has(type + "-" + it.id) ? "busy" : "")}
+        ${heartBtn(isFavTmdb(type, it), title, hearting.has(type + "-" + it.id) ? "busy" : "")}</div>
       <div class="tt">${esc(title)}</div><div class="ty">${esc(date.slice(0, 4))}${it.vote_average ? ` · ★ ${it.vote_average.toFixed(1)}` : ""}</div>
     </div>`;
   }).join("")}</div>
@@ -1103,6 +1239,7 @@ function drawExploreGrid() {
   grid.querySelectorAll("[data-i]").forEach(b => b.onclick = e => {
     const it = ex.items[b.dataset.i];
     if (e.target.closest("[data-star]")) return toggleStar(type, it);
+    if (e.target.closest("[data-heart]")) return toggleHeartTmdb(type, it);
     openExploreItem(type, it.id);
   });
   const more = $("#exMore");
@@ -1146,15 +1283,15 @@ async function openExploreItem(type, id) {
               : `<button class="btn" data-a="addmovie">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add to my movies</button><button class="btn ghost fav-toggle" data-a="addmoviefav">${ICON.heart.replace("<svg", '<svg width="18" height="18"')} Add to favorites</button>`}`;
   const btn = a => content.querySelector(`[data-a="${a}"]`);
   btn("open") && (btn("open").onclick = () => { closeSheet(); go("/show/" + show.id); });
-  btn("fav") && (btn("fav").onclick = () => { movie.fav = !movie.fav; saveDb(); closeSheet(); refresh(); toast(movie.fav ? `${title} added to Favorites.` : `${title} removed from Favorites.`); });
+  btn("fav") && (btn("fav").onclick = () => { movie.fav = !movie.fav; saveDb(); closeSheet(); refresh(); favToast("movie", id); });
   btn("addmoviefav") && (btn("addmoviefav").onclick = async () => {
     await addFromTmdb("movie", id, d); db.movies[id].fav = true; saveDb();
-    closeSheet(); refresh(); toast(`${title} added to your movies and Favorites.`);
+    closeSheet(); refresh(); favToast("movie", id, true);
   });
   btn("favtv") && (btn("favtv").onclick = async () => {
-    if (show) { show.fav = !show.fav; saveDb(); closeSheet(); refresh(); return toast(show.fav ? `${title} added to Favorites.` : `${title} removed from Favorites.`); }
+    if (show) { show.fav = !show.fav; saveDb(); closeSheet(); refresh(); return favToast("show", show.id); }
     const b = btn("favtv"); b.disabled = true; b.lastChild.textContent = " Adding…";
-    try { const added = await addFromTmdb("tv", id, d); db.shows[added.id].fav = true; saveDb(); closeSheet(); refresh(); toast(`${title} added to My Shows and Favorites.`); }
+    try { const added = await addFromTmdb("tv", id, d); db.shows[added.id].fav = true; saveDb(); closeSheet(); refresh(); favToast("show", added.id, true); }
     catch (e) { b.disabled = false; b.lastChild.textContent = " Add to favorites"; content.querySelector("#itemErr").innerHTML = `<div class="err">${netProblem(e)}</div>`; }
   });
   btn("profile") && (btn("profile").onclick = async () => {
@@ -1193,6 +1330,29 @@ async function toggleStar(type, it) {
     toast(e.message === "notfound" ? `Couldn't find episode info for ${title}. Try Add show on My Shows.` : `Couldn't add ${title}. Check your connection.`);
   }
   starring.delete(key); drawExploreGrid();
+}
+const hearting = new Set();
+function isFavTmdb(type, it) {
+  const e = libraryEntry(type, it);
+  return !!(e && (e.kind === "show" ? db.shows[e.id] : db.movies[e.id]).fav);
+}
+async function toggleHeartTmdb(type, it) {
+  const key = type + "-" + it.id;
+  if (hearting.has(key) || starring.has(key)) return;
+  const e = libraryEntry(type, it);
+  if (e) {
+    const item = e.kind === "show" ? db.shows[e.id] : db.movies[e.id];
+    item.fav = !item.fav; saveDb(); drawExploreGrid(); return favToast(e.kind, e.id);
+  }
+  hearting.add(key); drawExploreGrid();
+  try {
+    const added = await addFromTmdb(type, it.id);
+    (added.kind === "show" ? db.shows[added.id] : db.movies[added.id]).fav = true; saveDb();
+    favToast(added.kind, added.id, true);
+  } catch (err) {
+    toast(err.message === "notfound" ? `Couldn't find episode info for ${it.title || it.name}.` : `Couldn't add ${it.title || it.name}. Check your connection.`);
+  }
+  hearting.delete(key); drawExploreGrid();
 }
 // Episode tracking uses TVMaze; match the TMDB show to it.
 async function findOnTvMaze(d, title, year) {
@@ -1259,7 +1419,7 @@ function renderShow(id) {
   $("#favBtn").onclick = () => {
     show.fav = !show.fav; saveDb();
     $("#favBtn").classList.toggle("on", show.fav); $("#favBtn").setAttribute("aria-pressed", show.fav);
-    toast(show.fav ? `${show.name} added to Favorites.` : `${show.name} removed from Favorites.`);
+    favToast("show", id);
   };
   const svc = $("#svc");
   const setService = v => {
@@ -1438,7 +1598,7 @@ function cloudData() {
   }
   const st = settings();
   const out = { v: 1, updatedAt: Date.now(), device: deviceId(), shows, movies: db.movies || {},
-                settings: { view: st.view, region: st.region, tmdbKey: st.tmdbKey } };
+                settings: { view: st.view, region: st.region, tmdbKey: st.tmdbKey }, favCategories: db.favCategories };
   return JSON.parse(JSON.stringify(out)); // drops undefined values (Firestore rejects them)
 }
 // Short fingerprint of the list, remembered on the device, to tell whether anything changed since the last sync.
@@ -1456,6 +1616,7 @@ function applyCloud(data) {
     shows[id] = { episodes: (old[id] && old[id].episodes) || [], fetchedAt: (old[id] && old[id].fetchedAt) || 0, ...sh };
   db.shows = shows;
   db.movies = data.movies || {};
+  if (Array.isArray(data.favCategories)) db.favCategories = data.favCategories;
   const st = settings();
   for (const [k, v] of Object.entries(data.settings || {})) if (v !== undefined && v !== null && v !== "") st[k] = v;
   applyingRemote = false;
@@ -1470,12 +1631,15 @@ function mergeLocalInto(cloud) {
     if (!out.shows[id]) { out.shows[id] = sh; continue; }
     out.shows[id].watched = { ...(sh.watched || {}), ...(out.shows[id].watched || {}) };
     if (!out.shows[id].service && sh.service) out.shows[id].service = sh.service;
+    if (sh.fav) out.shows[id].fav = true;
+    if (sh.favCats) out.shows[id].favCats = [...new Set([...(out.shows[id].favCats || []), ...sh.favCats])];
   }
   for (const [id, m] of Object.entries(local.movies)) {
     if (!out.movies[id]) out.movies[id] = m;
     else out.movies[id].watched = out.movies[id].watched || m.watched;
   }
   for (const [k, v] of Object.entries(local.settings)) if (v && !out.settings[k]) out.settings[k] = v;
+  if (local.favCategories) out.favCategories = [...new Set([...(out.favCategories || []), ...local.favCategories])];
   return out;
 }
 function onLocalChange() {
