@@ -296,9 +296,10 @@ body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
 .provrow label{font-size:13px;font-weight:650;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
 .provrow{gap:8px!important}
 .provrow select{flex:1 1 0;min-width:0;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:0 8px;font-size:15px;color:var(--text);text-overflow:ellipsis}
-.provrow #provSel{flex-grow:1.6}
+.provrow #provSel{flex-grow:1.25}
 .exhead{display:flex;gap:8px;align-items:center;margin-bottom:12px}
-.exhead .seg{flex:1;margin:0}
+.exhead .seg{flex:1;margin:0;min-width:0}
+.exhead #sortSel{flex:none;width:106px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:0 8px;font-size:15px;color:var(--text)}
 .exhead .seg.mini{flex:none}
 .tabtools{display:flex;justify-content:flex-end;margin:-4px 0 10px}
 .sheet-title{font-size:22px}
@@ -1724,7 +1725,14 @@ async function providers(type) {
 }
 // Your subscriptions (or all, if you haven't chosen) plus every free service.
 const visibleProviders = provs => { const subs = mySubs(), free = myFree(); return provs.filter(p => p.free ? free.includes(p.label) : (!subs || subs.includes(p.label))); };
-const ex = { type: "tv", prov: "All", sort: "popular", page: 1, pages: 1, items: [], seq: 0, error: null, loading: false };
+// TMDB genres (TV and movies have different lists); ex.genre is a genre name, "" = all.
+const genreCache = {};
+async function genres(type) {
+  if (genreCache[type]) return genreCache[type];
+  const res = await tmdb(`/genre/${type}/list`, { language: navigator.language || "en-US" });
+  return (genreCache[type] = (res.genres || []).sort((a, b) => a.name.localeCompare(b.name)));
+}
+const ex = { type: "tv", prov: "All", genre: "", sort: "popular", page: 1, pages: 1, items: [], seq: 0, error: null, loading: false };
 
 const reExplore = () => { if (location.hash === "#/explore") renderExplore(); };
 function renderExplore() {
@@ -1790,12 +1798,19 @@ function openExploreSettings() {
 async function drawExploreControls() {
   const body = $("#exBody");
   body.innerHTML = `
-    <div class="exhead"><div class="seg">${[["tv", "TV shows"], ["movie", "Movies"]].map(([v, l]) => `<button data-type="${v}" class="${ex.type === v ? "on" : ""}">${l}</button>`).join("")}</div>
+    <div class="exhead"><div class="seg">${[["tv", "TV"], ["movie", "Movies"]].map(([v, l]) => `<button data-type="${v}" class="${ex.type === v ? "on" : ""}">${l}</button>`).join("")}</div>
+      <select id="sortSel" aria-label="Sort">${[["popular", "Popular"], ["top", "Top rated"], ["new", "Newest"]].map(([v, l]) => `<option value="${v}" ${ex.sort === v ? "selected" : ""}>${l}</option>`).join("")}</select>
       ${viewToggleHtml(settings().exView === "text")}</div>
     <div class="provrow">
       <select id="provSel" aria-label="Service"><option value="All">All services</option></select>
-      <select id="sortSel" aria-label="Sort">${[["popular", "Popular"], ["top", "Top rated"], ["new", "Newest"]].map(([v, l]) => `<option value="${v}" ${ex.sort === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+      <select id="genreSel" aria-label="Genre"><option value="">All genres</option></select></div>
     <div id="exGrid"></div>`;
+  $("#genreSel").onchange = e => { ex.genre = e.target.value; loadExplore(true); };
+  genres(ex.type).then(list => {
+    const g = $("#genreSel"); if (!g) return;
+    if (ex.genre && !list.some(x => x.name === ex.genre)) ex.genre = "";   // e.g. a movie-only genre after switching to TV
+    g.innerHTML = `<option value="">All genres</option>` + list.map(x => `<option value="${esc(x.name)}" ${x.name === ex.genre ? "selected" : ""}>${esc(x.name)}</option>`).join("");
+  }).catch(() => {});
   body.querySelectorAll("[data-type]").forEach(b => b.onclick = () => { if (ex.type !== b.dataset.type) { ex.type = b.dataset.type; drawExploreControls(); loadExplore(true); } });
   body.querySelectorAll("[data-view]").forEach(b => b.onclick = () => {
     settings().exView = b.dataset.view; saveDb();
@@ -1832,6 +1847,7 @@ async function loadExplore(reset) {
     const dateField = ex.type === "tv" ? "first_air_date" : "primary_release_date";
     const params = { watch_region: region(), with_watch_providers: ids.join("|"), with_watch_monetization_types: "flatrate|free|ads",
                      page: ex.page, include_adult: "false", language: navigator.language || "en-US" };
+    if (ex.genre) { const g = (await genres(ex.type)).find(x => x.name === ex.genre); if (g) params.with_genres = g.id; }
     if (ex.sort === "popular") params.sort_by = "popularity.desc";
     if (ex.sort === "top") { params.sort_by = "vote_average.desc"; params["vote_count.gte"] = ex.type === "tv" ? 200 : 500; }
     if (ex.sort === "new") { params.sort_by = dateField + ".desc"; params[dateField + ".lte"] = today(); params["vote_count.gte"] = 10; }
