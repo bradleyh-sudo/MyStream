@@ -1,0 +1,3 @@
+# test screenshots and other local files
+*.png
+.DS_Store

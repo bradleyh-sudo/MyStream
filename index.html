@@ -108,7 +108,8 @@ body.has-tabs{padding-bottom:calc(env(safe-area-inset-bottom) + 84px)}
 .setup ol{margin:10px 0 14px 20px;display:flex;flex-direction:column;gap:6px}
 .setup p{margin-bottom:8px}
 a{color:var(--accent)}
-.sheet{max-height:88vh;overflow-y:auto}
+.sheet{max-height:88vh;max-height:88dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.sheet > *{flex-shrink:0}
 .content{display:flex;flex-direction:column;gap:12px}
 .detail{display:flex;gap:14px}
 .detail .poster{width:92px;height:138px;border-radius:10px}
@@ -300,6 +301,13 @@ body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
 .exhead .seg{flex:1;margin:0}
 .exhead .seg.mini{flex:none}
 .tabtools{display:flex;justify-content:flex-end;margin:-4px 0 10px}
+.sheet-title{font-size:22px}
+.subgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.subpick{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;font-size:14px;cursor:pointer;background:var(--surface)}
+.field .subpick{display:flex;margin:0;text-transform:none;letter-spacing:0;font-size:14px;font-weight:550;color:var(--text)}
+.field .subpick input{width:18px;height:18px;padding:0;border:0;accent-color:var(--accent);flex:none}
+.subpick span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.subpick:has(input:checked){border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
 .count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;align-self:flex-start;padding-top:2px}
 .empty{text-align:center;color:var(--muted);padding:56px 16px}
 .empty h2{color:var(--text);font-size:20px;margin-bottom:6px}
@@ -532,6 +540,7 @@ const ICON = {
   back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 5l-7 7 7 7"/></svg>',
   more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>',
+  gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
   person: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>',
   people: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><circle cx="17" cy="9" r="2.8"/><path d="M16.5 14.2c3 .2 5 2.4 5 5.3"/></svg>',
   heart: '<svg viewBox="0 0 24 24" stroke-width="2" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.2-9.4C1.6 7.6 3.9 4.5 7.2 4.5c2 0 3.6 1.1 4.8 2.9 1.2-1.8 2.8-2.9 4.8-2.9 3.3 0 5.6 3.1 4.4 6.6-1.7 4.8-9.2 9.4-9.2 9.4z"/></svg>',
@@ -895,7 +904,11 @@ async function backgroundRefresh() {
 function openMainMenu() {
   const u = account.user;
   sheet(`
-    <h3>Account</h3>
+    <h2 class="sheet-title">Settings</h2>
+    <h3>My streaming services</h3>
+    <p>${mySubs() ? (mySubs().length ? "You pay for: " + mySubs().map(esc).join(", ") + "." : "None picked, so Explore shows free services only.") : "Pick the services you pay for, so Explore shows what you can watch."}</p>
+    <button class="btn ${mySubs() ? "ghost" : ""}" data-a="subs">Choose my services</button>
+    <h3 style="margin-top:8px">Account</h3>
     ${!account.enabled ? `<p>Accounts aren't switched on for this copy of the app yet.</p>`
       : u ? `<p>Signed in as <b>${esc(u.email)}</b>.<br><span id="syncLine">${esc(syncStatusText())}</span></p>
              <button class="btn ghost" data-a="lists">${ICON.people.replace("<svg", '<svg width="18" height="18"')} Lists &amp; sharing</button>
@@ -903,9 +916,7 @@ function openMainMenu() {
           : `<p>Create a free account to save your shows and movies, and see them on any phone or computer.</p>
              <button class="btn" data-a="register">Create account</button>
              <button class="btn ghost" data-a="signin">Sign in</button>`}
-    <h3 style="margin-top:8px">Streaming services</h3>
-    <p>${mySubs() ? (mySubs().length ? "You pay for: " + mySubs().map(esc).join(", ") + "." : "No subscriptions picked (free services only).") : "Pick the services you pay for, so Explore shows what you can watch."}</p>
-    <button class="btn ghost" data-a="subs">My streaming services</button>
+    <h3 style="margin-top:8px">Explore</h3>
     <button class="btn ghost" data-a="exset">Explore settings (TMDB key, country)</button>
     <h3 style="margin-top:8px">Backup</h3>
     <p>${u ? "Your list is saved to your account. You can also export a backup file." : "Without an account, your shows are saved in this browser only. Export a backup file to keep them safe or move them to another device."}</p>
@@ -913,13 +924,14 @@ function openMainMenu() {
     <button class="btn ghost" data-a="import">Import backup</button>
   `, (m, close) => {
     const on = (a, f) => { const b = m.querySelector(`[data-a="${a}"]`); if (b) b.onclick = f; };
+    m.querySelector('[data-close]').textContent = "Close";
     on("export", () => { exportBackup(); close(); });
     on("import", () => { close(); $("#importFile").click(); });
     on("register", () => { close(); openAccountSheet("register"); });
     on("signin", () => { close(); openAccountSheet("signin"); });
     on("signout", () => { close(); confirmSignOut(); });
     on("lists", () => { close(); openListsSheet(); });
-    on("subs", () => { close(); openServicesPicker(); });
+    on("subs", () => { close(); openServicesPicker(openMainMenu); });
     on("exset", () => { close(); openExploreSettings(); });
   });
 }
@@ -1118,7 +1130,7 @@ function memberSummary(k) {
 function topBarHtml(title) {
   return `<header class="bar">
       <h1>${esc(title)}</h1>
-      <button class="icon-btn" id="menuBtn" aria-label="Menu">${ICON.more}</button>
+      <button class="icon-btn" id="menuBtn" aria-label="Settings">${ICON.gear}</button>
       <button class="btn" id="addBtn">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add show</button>
     </header>
     ${listSwitcherHtml()}`;
@@ -1649,7 +1661,9 @@ function openServicesPicker(after) {
   `, (m, close) => {
     m.querySelector('[data-a="save"]').onclick = () => {
       settings().mySubs = [...m.querySelectorAll(".catopt input:checked")].map(i => i.value);
-      saveDb(); close(); toast("Saved your services."); after ? after() : refresh();
+      saveDb(); close(); toast("Saved your services.");
+      if (location.hash === "#/explore") { drawExploreControls(); loadExplore(true); } else refresh();
+      if (after) after();
     };
   });
 }
@@ -1736,7 +1750,6 @@ async function drawExploreControls() {
   body.innerHTML = `
     <div class="exhead"><div class="seg">${[["tv", "TV shows"], ["movie", "Movies"]].map(([v, l]) => `<button data-type="${v}" class="${ex.type === v ? "on" : ""}">${l}</button>`).join("")}</div>
       ${viewToggleHtml(settings().exView === "text")}</div>
-    ${mySubs() ? "" : `<div class="banner subs-banner"><span>Tell Explore which services you pay for, so it only shows what you can watch.</span><button class="btn small" id="pickSubs">Choose</button></div>`}
     <div class="provrow">
       <select id="provSel" aria-label="Service"><option value="All">All services</option></select>
       <select id="sortSel" aria-label="Sort">${[["popular", "Popular"], ["top", "Top rated"], ["new", "Newest"]].map(([v, l]) => `<option value="${v}" ${ex.sort === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
@@ -1748,7 +1761,7 @@ async function drawExploreControls() {
     drawExploreGrid();
   });
   $("#sortSel").onchange = e => { ex.sort = e.target.value; loadExplore(true); };
-  $("#pickSubs") && ($("#pickSubs").onclick = () => openServicesPicker(() => { drawExploreControls(); loadExplore(true); }));
+
   try {
     const provs = await providers(ex.type);
     if (!visibleProviders(provs).some(p => p.label === ex.prov)) ex.prov = "All";
@@ -2467,7 +2480,10 @@ function openAccountSheet(mode) {
     <form id="acctForm" class="acct">
       <div class="field"><label for="acEmail">Email</label><input id="acEmail" type="email" autocomplete="email" required></div>
       <div class="field"><label for="acPass">Password</label><input id="acPass" type="password" autocomplete="${reg ? "new-password" : "current-password"}" minlength="6" required></div>
-      ${reg ? `<p class="sub">At least 6 characters.</p>` : ""}
+      ${reg ? `<p class="sub">At least 6 characters.</p>
+        <div class="field"><label>Which services do you pay for?</label>
+          <div class="subgrid">${PAID_SERVICES.map(n => `<label class="subpick"><input type="checkbox" value="${esc(n)}" ${(mySubs() || []).includes(n) ? "checked" : ""}>${serviceIcon(n, 20)}<span>${esc(n)}</span></label>`).join("")}</div>
+          <p class="sub">Explore shows these plus all the free services. You can change this later in Settings.</p></div>` : ""}
       <div id="acErr" class="err" hidden></div>
       <button class="btn" type="submit">${reg ? "Create account" : "Sign in"}</button>
     </form>
@@ -2475,6 +2491,7 @@ function openAccountSheet(mode) {
     ${reg ? "" : `<button class="linkish" data-a="forgot">Forgot password?</button>`}
   `, (m, close) => {
     const err = m.querySelector("#acErr");
+    const saveRegSubs = () => { settings().mySubs = [...m.querySelectorAll(".subpick input:checked")].map(i => i.value); writeLocal(); };
     const showErr = t => { err.hidden = false; err.textContent = t; };
     setTimeout(() => m.querySelector("#acEmail").focus(), 50);
     m.querySelector("#acctForm").onsubmit = async ev => {
@@ -2484,6 +2501,7 @@ function openAccountSheet(mode) {
       btn.disabled = true; btn.textContent = reg ? "Creating…" : "Signing in…"; err.hidden = true;
       try {
         if (!backend) throw { code: "auth/network-request-failed" };
+        if (reg) saveRegSubs();
         await (reg ? backend.signUp(email, pass) : backend.signIn(email, pass));
         close();
         toast(reg ? "Account created. Your list is being saved." : "Signed in.");
@@ -2496,6 +2514,7 @@ function openAccountSheet(mode) {
       err.hidden = true;
       try {
         if (!backend || !backend.signInGoogle) throw { code: "auth/network-request-failed" };
+        if (reg) saveRegSubs();
         await backend.signInGoogle();
         close(); toast("Signed in.");
       } catch (e) {
