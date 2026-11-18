@@ -866,7 +866,7 @@ function renderHome() {
         ${section("In progress", "", watching, "progress")}
         ${section("Haven't started", "Saved for later. Check off an episode and it moves up to In progress.", notStarted, "notstarted")}
         ${caughtSection}` : `
-        ${movieSection("To watch", otherMovies.filter(m => !m.watched), "movies")}
+        ${movieSection("To watch", otherMovies.filter(m => !m.watched).sort((a, b) => (a.title || "").localeCompare(b.title || "")), "movies")}
         ${movieSection("Watched", otherMovies.filter(m => m.watched), "movieswatched")}`}
     ` : `
       <div class="empty">
