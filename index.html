@@ -755,7 +755,9 @@ function goBack() {
 }
 
 /* ---------- home ---------- */
+function hideBulkBar() { const b = $("#bulkBar"); if (b) b.hidden = true; document.body.classList.remove("has-bulk"); }
 function renderHome() {
+  if (!sel.on) hideBulkBar();
   const shows = Object.values(db.shows).filter(isListed);
   const movies = Object.values(db.movies || {}).filter(isListed);
   const services = [...new Set([...shows, ...movies].map(s => s.service || "No service set"))].sort((a, b) => a.localeCompare(b));
@@ -1097,7 +1099,7 @@ function drawResults(list) {
   bindMovieResults(out);
   const ps = $("#pickStart"); if (ps) ps.onclick = () => { pick.on = true; pick.ids.clear(); drawResults(list); };
   const pc = $("#pickCancel"); if (pc) pc.onclick = () => { pick.on = false; pick.ids.clear(); $("#bulkBar").hidden = true; document.body.classList.remove("has-bulk"); drawResults(list); };
-  if (pick.on) drawPickBar();
+  if (pick.on) drawPickBar(); else hideBulkBar();
   out.querySelectorAll(".result:not(.mvres)").forEach(c => c.onclick = e => {
     const id = c.dataset.id;
     if (pick.on) { const n = Number(id); pick.ids.has(n) ? pick.ids.delete(n) : pick.ids.add(n); return drawResults(list); }
