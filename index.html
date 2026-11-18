@@ -301,7 +301,11 @@ body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
 .exhead .seg{flex:1;margin:0;min-width:0}
 .exhead #sortSel{flex:none;width:106px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:0 8px;font-size:15px;color:var(--text)}
 .exhead .seg.mini{flex:none}
-.tabtools{display:flex;justify-content:flex-end;margin:-4px 0 10px}
+.tabtools{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:-4px 0 10px}
+.favrows .row.compact{min-height:44px;padding:4px 8px 4px 12px;gap:8px}
+.favrow.compact .rn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.favrow.compact .fcats{flex:none;flex-wrap:nowrap;max-width:48%;overflow:hidden;justify-content:flex-end}
+.favrow.compact .catpill{font-size:11px;padding:1px 7px;white-space:nowrap}
 .sheet-title{font-size:22px}
 .subgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .subpick{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;font-size:14px;cursor:pointer;background:var(--surface)}
@@ -1416,7 +1420,8 @@ function renderFavorites() {
   const shown = favs.filter(f => favFilter === "All" || (favFilter === "None" ? !(f.it.favCats || []).length : (f.it.favCats || []).includes(favFilter)));
   app.innerHTML = `
     ${topBarHtml("Favorites")}
-    ${favs.length ? `<div class="tabtools"><button class="btn ghost small" id="favPick">${ICON.dice.replace("<svg", '<svg width="16" height="16"')} Pick one for me</button></div>` : ""}
+    ${favs.length ? `<div class="tabtools"><button class="btn ghost small" id="favPick">${ICON.dice.replace("<svg", '<svg width="16" height="16"')} Pick one for me</button>
+      ${viewToggleHtml(settings().favView === "text")}</div>` : ""}
     ${favs.length ? `
       <div class="chips">
         <button class="chip ${favFilter === "All" ? "on" : ""}" data-cat="All">All <span class="cn">${favs.length}</span></button>
@@ -1425,7 +1430,7 @@ function renderFavorites() {
         <button class="chip add-cat" id="newCat" aria-label="New category">+ New</button>
       </div>
       ${cats.includes(favFilter) ? `<div class="tabtools catedit"><button class="btn ghost small" id="editCat">${shown.length ? "Add or remove favorites" : `Add favorites to ${esc(favFilter)}`}</button></div>` : ""}
-      ${shown.length ? `<div class="rows favrows">${shown.map(favRowHtml).join("")}</div>`
+      ${shown.length ? `<div class="rows favrows ${settings().favView === "text" ? "notext-art" : ""}">${shown.map(favRowHtml).join("")}</div>`
         : `<p class="empty">Nothing in ${esc(favFilter === "None" ? "No category" : favFilter)} yet.</p>`}
     ` : `
       <div class="empty">
@@ -1434,6 +1439,7 @@ function renderFavorites() {
       </div>`}
   `;
   bindTopBar();
+  app.querySelectorAll(".tabtools [data-view]").forEach(b => b.onclick = () => { settings().favView = b.dataset.view; saveDb(); renderFavorites(); });
   $("#favPick") && ($("#favPick").onclick = () => pickFavorite(favFilter === "None" ? "All" : favFilter));
   app.querySelectorAll("[data-cat]").forEach(b => b.onclick = () => { favFilter = b.dataset.cat; renderFavorites(); });
   $("#newCat") && ($("#newCat").onclick = () => newCategory(c => { favFilter = c; renderFavorites(); openCategoryMembers(c); }));
@@ -1453,6 +1459,12 @@ function favRowHtml(f) {
     const ns = new Set(reg.map(e => e.s)).size;
     sub = reg.length ? `${ns} season${ns === 1 ? "" : "s"} · ${reg.length} eps` : "TV show";
   } else sub = [it.year, "Movie"].filter(Boolean).join(" · ");
+  if (settings().favView === "text") return `<div class="row favrow compact" data-kind="${f.kind}" data-id="${f.id}" role="button" tabindex="0">
+    ${serviceIcon(it.service, 18)}
+    <span class="rn">${esc(f.name)}</span>
+    <span class="fcats">${cats.map(c => `<span class="catpill">${esc(c)}</span>`).join("")}<button class="catbtn" data-cats aria-label="Categories for ${esc(f.name)}">${cats.length ? "Edit" : "+ Cat"}</button></span>
+    ${heartBtn(true, f.name, "sm")}
+  </div>`;
   return `<div class="row favrow" data-kind="${f.kind}" data-id="${f.id}" role="button" tabindex="0">
     ${posterHtml(f.kind === "show" ? it.image : it.poster, f.name, "poster mini")}
     <div class="fbody">
