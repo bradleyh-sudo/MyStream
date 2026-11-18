@@ -62,10 +62,6 @@ header.bar h1{font-size:26px;font-weight:750;letter-spacing:-.02em;flex:1;min-wi
 .btn.danger{background:transparent;color:var(--danger);border:1px solid var(--line)}
 .icon-btn{width:40px;height:40px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;background:var(--surface2);flex:none}
 .icon-btn svg{width:20px;height:20px}
-.chips{display:flex;flex-wrap:wrap;gap:8px;padding:2px 0 12px}
-.chips::-webkit-scrollbar{display:none}
-.chip{flex:none;height:32px;padding:0 14px;border-radius:999px;background:var(--surface2);font-size:14px;font-weight:550;color:var(--muted)}
-.chip.on{background:var(--text);color:var(--bg)}
 .list{display:flex;flex-direction:column;gap:10px}
 .card{display:flex;gap:12px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px;box-shadow:var(--shadow);text-align:left;width:100%}
 .poster{width:56px;height:80px;border-radius:8px;object-fit:cover;background:var(--surface2);flex:none;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:22px;font-weight:700;overflow:hidden}
@@ -107,9 +103,6 @@ header.bar h1{font-size:26px;font-weight:750;letter-spacing:-.02em;flex:1;min-wi
 .seg{display:flex;background:var(--surface2);border-radius:12px;padding:3px;margin-bottom:12px}
 .seg button{flex:1;height:36px;border-radius:9px;font-weight:600;color:var(--muted)}
 .seg button.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow)}
-.chip.prov{display:inline-flex;align-items:center;gap:6px}
-.chip.prov img{width:20px;height:20px;border-radius:5px}
-.chips.sorts{padding-top:0}
 .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 10px}
 @media (min-width:560px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
 .tile{text-align:left;min-width:0}
@@ -142,7 +135,6 @@ a{color:var(--accent)}
 .card.movie.seen .check svg{opacity:1}
 .card.movie.seen .name{color:var(--muted)}
 .toolbar{display:flex;align-items:flex-start;gap:6px}
-.toolbar .chips{flex:1;min-width:0}
 .seg.mini{flex:none;margin:0;padding:2px;border-radius:10px}
 .seg.mini button{width:38px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center}
 .seg.mini svg{width:18px;height:18px}
@@ -221,8 +213,6 @@ a{color:var(--accent)}
 .svc-other input{flex:1;min-width:0;height:36px;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:0 10px;font-size:16px}
 .tile .heart{position:absolute;right:5px;bottom:5px;width:34px;height:34px;background:rgba(0,0,0,.55);color:#fff}
 .tile .heart.on{color:#ff5c72}
-.chip .cn{opacity:.6;font-weight:500;margin-left:2px}
-.chip.add-cat{background:transparent;border:1px dashed var(--line);color:var(--muted)}
 .favrows .row{align-items:center;padding:8px 10px;gap:12px;min-height:76px}
 .poster.mini{width:40px;height:58px;border-radius:6px;font-size:16px}
 .fbody{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
@@ -248,7 +238,6 @@ a{color:var(--accent)}
 .exrows .xs{flex:none;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
 .heart.sm{width:30px;height:30px}
 .heart.sm svg{width:18px;height:18px}
-.chips.sorts{padding-top:0}
 .btn.google{background:var(--surface);color:var(--text);border:1px solid var(--line);height:46px;gap:10px}
 .or{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}
 .or::before,.or::after{content:"";flex:1;height:1px;background:var(--line)}
@@ -299,6 +288,7 @@ body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
 .selbtn svg{width:21px;height:21px}
 .toolbar{align-items:center!important;margin-bottom:12px}
 .toolbar select{flex:1 1 0;min-width:0;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:0 8px;font-size:15px;color:var(--text)}
+.toolbar .btn{flex:none;height:40px}
 .selecting [data-show],.selecting [data-movie],.selecting .result{position:relative}
 .selbox{flex:none;width:26px;height:26px;border-radius:999px;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;color:transparent;background:var(--surface)}
 .selbox svg{width:14px;height:14px}
@@ -1517,6 +1507,7 @@ async function bulkAddShows(ids, key) {
 const DEFAULT_CATS = ["Rewatch", "Bedtime"];
 const favCategories = () => (db.favCategories = db.favCategories || DEFAULT_CATS.slice());
 let favFilter = "All";
+const NEW_CAT = "__new__";   // the "+ New category…" entry in the Favorites category dropdown
 function favItem(kind, id) { return kind === "show" ? db.shows[id] : (db.movies || {})[id]; }
 function favToast(kind, id, alsoAdded) {
   const it = favItem(kind, id); if (!it) return;
@@ -1541,15 +1532,16 @@ function renderFavorites() {
   const shown = favs.filter(f => favFilter === "All" || (favFilter === "None" ? !(f.it.favCats || []).length : (f.it.favCats || []).includes(favFilter)));
   app.innerHTML = `
     ${topBarHtml("Favorites")}
-    ${favs.length ? `<div class="tabtools"><button class="btn ghost small" id="favPick">${ICON.dice.replace("<svg", '<svg width="16" height="16"')} Pick one for me</button>
+    ${favs.length ? `<div class="toolbar">
+      <select id="favCat" aria-label="Category">
+        <option value="All">All categories (${favs.length})</option>
+        ${cats.map(c => `<option value="${esc(c)}" ${favFilter === c ? "selected" : ""}>${esc(c)} (${count(c)})</option>`).join("")}
+        ${none && cats.length ? `<option value="None" ${favFilter === "None" ? "selected" : ""}>No category (${none})</option>` : ""}
+        <option value="${NEW_CAT}">+ New category…</option>
+      </select>
+      <button class="btn ghost small" id="favPick">${ICON.dice.replace("<svg", '<svg width="16" height="16"')} Pick one for me</button>
       ${viewToggleHtml(settings().favView === "text")}</div>` : ""}
     ${favs.length ? `
-      <div class="chips">
-        <button class="chip ${favFilter === "All" ? "on" : ""}" data-cat="All">All <span class="cn">${favs.length}</span></button>
-        ${cats.map(c => `<button class="chip ${favFilter === c ? "on" : ""}" data-cat="${esc(c)}">${esc(c)} <span class="cn">${count(c)}</span></button>`).join("")}
-        ${none && cats.length ? `<button class="chip ${favFilter === "None" ? "on" : ""}" data-cat="None">No category <span class="cn">${none}</span></button>` : ""}
-        <button class="chip add-cat" id="newCat" aria-label="New category">+ New</button>
-      </div>
       ${cats.includes(favFilter) ? `<div class="tabtools catedit"><button class="btn ghost small" id="editCat">${shown.length ? "Add or remove favorites" : `Add favorites to ${esc(favFilter)}`}</button></div>` : ""}
       ${shown.length ? `<div class="rows favrows ${settings().favView === "text" ? "notext-art" : ""}">${shown.map(favRowHtml).join("")}</div>`
         : `<p class="empty">Nothing in ${esc(favFilter === "None" ? "No category" : favFilter)} yet.</p>`}
@@ -1560,10 +1552,14 @@ function renderFavorites() {
       </div>`}
   `;
   bindTopBar();
-  app.querySelectorAll(".tabtools [data-view]").forEach(b => b.onclick = () => { settings().favView = b.dataset.view; saveDb(); renderFavorites(); });
+  app.querySelectorAll(".toolbar [data-view]").forEach(b => b.onclick = () => { settings().favView = b.dataset.view; saveDb(); renderFavorites(); });
   $("#favPick") && ($("#favPick").onclick = () => pickFavorite(favFilter === "None" ? "All" : favFilter));
-  app.querySelectorAll("[data-cat]").forEach(b => b.onclick = () => { favFilter = b.dataset.cat; renderFavorites(); });
-  $("#newCat") && ($("#newCat").onclick = () => newCategory(c => { favFilter = c; renderFavorites(); openCategoryMembers(c); }));
+  // Category dropdown; its last entry makes a new category (the dropdown itself stays on the current one).
+  $("#favCat") && ($("#favCat").onchange = e => {
+    if (e.target.value !== NEW_CAT) { favFilter = e.target.value; return renderFavorites(); }
+    e.target.value = favFilter;
+    newCategory(c => { favFilter = c; renderFavorites(); openCategoryMembers(c); });
+  });
   $("#editCat") && ($("#editCat").onclick = () => openCategoryMembers(favFilter));
   app.querySelectorAll(".favrow").forEach(r => r.onclick = e => {
     const { kind, id } = r.dataset;
