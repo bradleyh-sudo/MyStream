@@ -400,6 +400,11 @@ body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
 .sheet{background:var(--surface);width:100%;max-width:520px;border-radius:18px 18px 0 0;padding:18px 16px calc(env(safe-area-inset-bottom) + 18px);display:flex;flex-direction:column;gap:10px}
 .sheet h3{font-size:18px}
 .sheet .btn{width:100%;height:46px}
+/* A text box with its button beside it, inside a pop-up (new list, new category, rename list):
+   the box takes the room and the button stays its own size, instead of the full-width rule above squeezing the box. */
+.sheet .search .btn,.sheet .svc-other .btn{width:auto;flex:none}
+.sheet .search .btn{height:44px}
+.sheet .svc-other .btn{height:40px}
 .sheet p{color:var(--muted);font-size:14px}
 .spinner{width:22px;height:22px;border:3px solid var(--surface2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin:40px auto}
 @keyframes spin{to{transform:rotate(360deg)}}
