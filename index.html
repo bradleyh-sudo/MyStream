@@ -806,10 +806,13 @@ function renderHome() {
   const byName = (a, b) => (a.s.name || "").localeCompare(b.s.name || "");
   const bySoonest = (a, b) => (a.st.upcoming?.stamp || a.st.upcoming?.date || "~").localeCompare(b.st.upcoming?.stamp || b.st.upcoming?.date || "~") || byName(a, b);
   const otherMovies = visibleMovies;
-  const watching = withStats.filter(x => x.st.everWatched && x.st.next)
+  // Shows put on hold from their page ("Take a break") get their own group; everything else is grouped by progress.
+  const onBreak = withStats.filter(x => x.s.onBreak).sort(byName);
+  const active = withStats.filter(x => !x.s.onBreak);
+  const watching = active.filter(x => x.st.everWatched && x.st.next)
     .sort((a, b) => (b.s.lastWatchedAt || 0) - (a.s.lastWatchedAt || 0) || byName(a, b));
-  const caught = withStats.filter(x => x.st.everWatched && !x.st.next).sort(bySoonest);
-  const notStarted = withStats.filter(x => !x.st.everWatched).sort(byName);
+  const caught = active.filter(x => x.st.everWatched && !x.st.next).sort(bySoonest);
+  const notStarted = active.filter(x => !x.st.everWatched).sort(byName);
   const textView = look() === "text";
   // Collapsible groups; which ones are collapsed is a synced setting.
   const collapsed = settings().collapsed || {};
@@ -850,6 +853,7 @@ function renderHome() {
       ${mode() === "tv" ? `
         ${section("In progress", "", watching, "progress")}
         ${section("Haven't started", "Saved for later. Check off an episode and it moves up to In progress.", notStarted, "notstarted")}
+        ${section("Taking a break", "On hold, with your progress kept. Open a show and tap Watching to pick it back up.", onBreak, "break")}
         ${caughtSection}` : `
         ${movieSection("To watch", otherMovies.filter(m => !m.watched).sort((a, b) => (a.title || "").localeCompare(b.title || "")), "movies")}
         ${movieSection("Watched", otherMovies.filter(m => m.watched), "movieswatched")}`}
@@ -2240,6 +2244,8 @@ function renderShow(id) {
       </div>
     </div>
     ${profileInfoHtml(show).summary}
+    ${isListed(show) ? `<div class="seg" id="breakSeg" role="group" aria-label="Watching or taking a break">
+      <button data-break="0">Watching</button><button data-break="1">Take a break</button></div>` : ""}
     <button class="btn ghost markall" id="markAll"></button>
     <div class="stats" id="summary">${summaryHtml(show)}</div>
     ${show.episodes.length ? "" : `<p class="empty">No episode info listed yet.</p>`}
@@ -2257,6 +2263,20 @@ function renderShow(id) {
   $("#more").onclick = () => showMenu(id);
   $("#favBtn").onclick = () => setFav("show", id, !show.fav);
   $("#listBtn").onclick = () => isListed(show) ? removeItem("show", id) : addToWatching("show", id);
+  // Take a break: moves the show to the "Taking a break" group on Watching; Watching brings it back. Checkmarks are never touched.
+  const drawBreak = () => $("#breakSeg") && $("#breakSeg").querySelectorAll("button").forEach(b => {
+    const on = (b.dataset.break === "1") === !!show.onBreak;
+    b.classList.toggle("on", on); b.setAttribute("aria-pressed", on);
+    if (b.dataset.break === "1") b.textContent = show.onBreak ? "Taking a break" : "Take a break";
+  });
+  drawBreak();
+  $("#breakSeg") && $("#breakSeg").querySelectorAll("button").forEach(b => b.onclick = () => {
+    const want = b.dataset.break === "1";
+    if (want === !!show.onBreak) return;
+    if (want) show.onBreak = true; else delete show.onBreak;
+    saveDb(); drawBreak();
+    toast(want ? `${show.name} is taking a break. Your progress is kept.` : `${show.name} is back in Watching.`);
+  });
   const svc = $("#svc");
   const setService = v => {
     v = v.trim();
