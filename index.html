@@ -309,6 +309,8 @@ body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
 .subpick span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .subpick:has(input:checked){border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
 .catedit{justify-content:flex-start;margin:-2px 0 10px}
+.pick-group{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-top:4px}
+.field .sublabel{margin-top:10px}
 .count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;align-self:flex-start;padding-top:2px}
 .empty{text-align:center;color:var(--muted);padding:56px 16px}
 .empty h2{color:var(--text);font-size:20px;margin-bottom:6px}
@@ -907,7 +909,8 @@ function openMainMenu() {
   sheet(`
     <h2 class="sheet-title">Settings</h2>
     <h3>My streaming services</h3>
-    <p>${mySubs() ? (mySubs().length ? "You pay for: " + mySubs().map(esc).join(", ") + "." : "None picked, so Explore shows free services only.") : "Pick the services you pay for, so Explore shows what you can watch."}</p>
+    <p>${mySubs() ? (mySubs().length ? "You pay for: " + mySubs().map(esc).join(", ") + "." : "No subscriptions picked.") : "Pick the services you pay for, so Explore shows what you can watch."}
+      ${myFree().length ? `<br>Free: ${myFree().map(esc).join(", ")}.` : "<br>No free services picked."}</p>
     <button class="btn ${mySubs() ? "ghost" : ""}" data-a="subs">Choose my services</button>
     <h3 style="margin-top:8px">Account</h3>
     ${!account.enabled ? `<p>Accounts aren't switched on for this copy of the app yet.</p>`
@@ -1677,17 +1680,29 @@ const MAIN_PROVIDERS = [
   ["Plex", /^plex$/i, "free"], ["Kanopy", /^kanopy$/i, "free"], ["Hoopla", /^hoopla$/i, "free"]
 ];
 const PAID_SERVICES = MAIN_PROVIDERS.filter(p => !p[2]).map(p => p[0]);
+const FREE_SERVICES = MAIN_PROVIDERS.filter(p => p[2] === "free").map(p => p[0]);
 const mySubs = () => Array.isArray(settings().mySubs) ? settings().mySubs : null;   // null = not chosen yet
+const myFree = () => Array.isArray(settings().myFree) ? settings().myFree : FREE_SERVICES;   // default: all free services
+// Read ticked boxes from a picker: paid ones -> mySubs, free ones -> myFree.
+function saveServiceChoices(root) {
+  const ticked = new Set([...root.querySelectorAll("input[data-svc]:checked")].map(i => i.value));
+  settings().mySubs = PAID_SERVICES.filter(n => ticked.has(n));
+  settings().myFree = FREE_SERVICES.filter(n => ticked.has(n));
+}
 function openServicesPicker(after) {
-  const cur = new Set(mySubs() || []);
+  const paid = new Set(mySubs() || []), free = new Set(myFree());
+  const row = (n, on) => `<label class="catopt">${serviceIcon(n, 26)}<span>${esc(n)}</span><input type="checkbox" data-svc value="${esc(n)}" ${on ? "checked" : ""}></label>`;
   sheet(`
     <h3>My streaming services</h3>
-    <p>Tick the ones you pay for. Explore will show those plus all the free services.</p>
-    <div class="catlist">${PAID_SERVICES.map(n => `<label class="catopt">${serviceIcon(n, 26)}<span>${esc(n)}</span><input type="checkbox" value="${esc(n)}" ${cur.has(n) ? "checked" : ""}></label>`).join("")}</div>
+    <p>Explore shows only the services you tick.</p>
+    <div class="pick-group">Subscriptions you pay for</div>
+    <div class="catlist">${PAID_SERVICES.map(n => row(n, paid.has(n))).join("")}</div>
+    <div class="pick-group">Free services (ads or library card)</div>
+    <div class="catlist">${FREE_SERVICES.map(n => row(n, free.has(n))).join("")}</div>
     <button class="btn" data-a="save">Save</button>
   `, (m, close) => {
     m.querySelector('[data-a="save"]').onclick = () => {
-      settings().mySubs = [...m.querySelectorAll(".catopt input:checked")].map(i => i.value);
+      saveServiceChoices(m);
       saveDb(); close(); toast("Saved your services.");
       if (location.hash === "#/explore") { drawExploreControls(); loadExplore(true); } else refresh();
       if (after) after();
@@ -1708,7 +1723,7 @@ async function providers(type) {
   return (providerCache[k] = out);
 }
 // Your subscriptions (or all, if you haven't chosen) plus every free service.
-const visibleProviders = provs => { const subs = mySubs(); return provs.filter(p => p.free || !subs || subs.includes(p.label)); };
+const visibleProviders = provs => { const subs = mySubs(), free = myFree(); return provs.filter(p => p.free ? free.includes(p.label) : (!subs || subs.includes(p.label))); };
 const ex = { type: "tv", prov: "All", sort: "popular", page: 1, pages: 1, items: [], seq: 0, error: null, loading: false };
 
 const reExplore = () => { if (location.hash === "#/explore") renderExplore(); };
@@ -1795,7 +1810,7 @@ async function drawExploreControls() {
     const selEl = $("#provSel");
     if (!selEl) return;
     const opt = p => `<option value="${esc(p.label)}" ${ex.prov === p.label ? "selected" : ""}>${esc(p.label)}</option>`;
-    const paid = visibleProviders(provs).filter(p => !p.free), free = provs.filter(p => p.free);
+    const vis = visibleProviders(provs), paid = vis.filter(p => !p.free), free = vis.filter(p => p.free);
     selEl.innerHTML = `<option value="All" ${ex.prov === "All" ? "selected" : ""}>All services</option>
       ${paid.length ? `<optgroup label="Subscription">${paid.map(opt).join("")}</optgroup>` : ""}
       ${free.length ? `<optgroup label="Free (with ads or library card)">${free.map(opt).join("")}</optgroup>` : ""}
@@ -2323,7 +2338,7 @@ function listPayload(key) {
     shows[id] = keep;
   }
   const out = { shows, movies: L.movies || {}, favCategories: L.favCategories || null };
-  if (key === "me") { const st = settings(); out.v = 1; out.settings = { view: st.view, region: st.region, tmdbKey: st.tmdbKey, hideEnded: st.hideEnded, mySubs: st.mySubs }; }
+  if (key === "me") { const st = settings(); out.v = 1; out.settings = { view: st.view, region: st.region, tmdbKey: st.tmdbKey, hideEnded: st.hideEnded, mySubs: st.mySubs, myFree: st.myFree }; }
   else out.name = L.name || "Shared list";
   return JSON.parse(JSON.stringify(out)); // drops undefined values (Firestore rejects them)
 }
@@ -2509,8 +2524,10 @@ function openAccountSheet(mode) {
       <div class="field"><label for="acPass">Password</label><input id="acPass" type="password" autocomplete="${reg ? "new-password" : "current-password"}" minlength="6" required></div>
       ${reg ? `<p class="sub">At least 6 characters.</p>
         <div class="field"><label>Which services do you pay for?</label>
-          <div class="subgrid">${PAID_SERVICES.map(n => `<label class="subpick"><input type="checkbox" value="${esc(n)}" ${(mySubs() || []).includes(n) ? "checked" : ""}>${serviceIcon(n, 20)}<span>${esc(n)}</span></label>`).join("")}</div>
-          <p class="sub">Explore shows these plus all the free services. You can change this later in Settings.</p></div>` : ""}
+          <div class="subgrid">${PAID_SERVICES.map(n => `<label class="subpick"><input type="checkbox" data-svc value="${esc(n)}" ${(mySubs() || []).includes(n) ? "checked" : ""}>${serviceIcon(n, 20)}<span>${esc(n)}</span></label>`).join("")}</div>
+          <label class="sublabel">Free services you use</label>
+          <div class="subgrid">${FREE_SERVICES.map(n => `<label class="subpick"><input type="checkbox" data-svc value="${esc(n)}" ${myFree().includes(n) ? "checked" : ""}>${serviceIcon(n, 20)}<span>${esc(n)}</span></label>`).join("")}</div>
+          <p class="sub">Explore shows only what you tick. You can change this later in Settings.</p></div>` : ""}
       <div id="acErr" class="err" hidden></div>
       <button class="btn" type="submit">${reg ? "Create account" : "Sign in"}</button>
     </form>
@@ -2518,7 +2535,7 @@ function openAccountSheet(mode) {
     ${reg ? "" : `<button class="linkish" data-a="forgot">Forgot password?</button>`}
   `, (m, close) => {
     const err = m.querySelector("#acErr");
-    const saveRegSubs = () => { settings().mySubs = [...m.querySelectorAll(".subpick input:checked")].map(i => i.value); writeLocal(); };
+    const saveRegSubs = () => { saveServiceChoices(m); writeLocal(); };
     const showErr = t => { err.hidden = false; err.textContent = t; };
     setTimeout(() => m.querySelector("#acEmail").focus(), 50);
     m.querySelector("#acctForm").onsubmit = async ev => {
