@@ -293,7 +293,12 @@ body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
 .subs-banner{margin-bottom:12px}
 .provrow{display:flex;align-items:center;gap:10px;margin:0 0 12px}
 .provrow label{font-size:13px;font-weight:650;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
-.provrow select{flex:1;min-width:0;height:42px;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:0 10px;font-size:16px;color:var(--text)}
+.provrow{gap:8px!important}
+.provrow select{flex:1 1 0;min-width:0;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:0 8px;font-size:15px;color:var(--text);text-overflow:ellipsis}
+.provrow #provSel{flex-grow:1.6}
+.exhead{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+.exhead .seg{flex:1;margin:0}
+.exhead .seg.mini{flex:none}
 .tabtools{display:flex;justify-content:flex-end;margin:-4px 0 10px}
 .count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;align-self:flex-start;padding-top:2px}
 .empty{text-align:center;color:var(--muted);padding:56px 16px}
@@ -444,7 +449,18 @@ function normalizeService(name) {
   const n = String(name).trim().replace(/\s+(Amazon|Apple TV|Roku Premium) Channel$/i, "").replace(/\s+(Standard |Basic )?with Ads$/i, "");
   if (/^(hbo\b.*|max)$/i.test(n)) return "HBO Max";
   if (/^hulu\b/i.test(n)) return "Disney+";   // Hulu now lives inside Disney+
-  return n;
+  return networkHome(n) || n;   // TV networks -> the streaming service that carries them
+}
+function networkHome(n) {
+  const homes = [
+  [/^(nbc|bravo|usa network|syfy|e!|oxygen)$/i, "Peacock"],
+  [/^(cbs|showtime|comedy central|mtv|nickelodeon|nick jr\.?|bet|paramount network|smithsonian channel|cbs all access)$/i, "Paramount+"],
+  [/^(abc|fox|fx|fxx|freeform|abc family|national geographic|nat geo|disney channel|disney junior|disney xd)$/i, "Disney+"],
+  [/^(tbs|tnt|tlc|discovery( channel)?|hgtv|food network|cartoon network|adult swim|cnn|trutv|investigation discovery|animal planet|cinemax)$/i, "HBO Max"],
+  [/^(amc|bbc america|ifc|sundancetv|sundance tv|we tv)$/i, "AMC+"]
+  ];
+  const hit = homes.find(([re]) => re.test(n));
+  return hit ? hit[1] : null;
 }
 function normalizeListServices(L) {
   for (const x of [...Object.values(L.shows || {}), ...Object.values(L.movies || {})]) {
@@ -1718,11 +1734,12 @@ function openExploreSettings() {
 async function drawExploreControls() {
   const body = $("#exBody");
   body.innerHTML = `
-    <div class="seg">${[["tv", "TV shows"], ["movie", "Movies"]].map(([v, l]) => `<button data-type="${v}" class="${ex.type === v ? "on" : ""}">${l}</button>`).join("")}</div>
-    ${mySubs() ? "" : `<div class="banner subs-banner"><span>Tell Explore which services you pay for, so it only shows what you can watch.</span><button class="btn small" id="pickSubs">Choose</button></div>`}
-    <div class="provrow"><label for="provSel">Service</label><select id="provSel"><option value="All">All services</option></select></div>
-    <div class="provrow"><label for="sortSel">Sort</label><select id="sortSel">${[["popular", "Most popular"], ["top", "Top rated"], ["new", "Newest"]].map(([v, l]) => `<option value="${v}" ${ex.sort === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+    <div class="exhead"><div class="seg">${[["tv", "TV shows"], ["movie", "Movies"]].map(([v, l]) => `<button data-type="${v}" class="${ex.type === v ? "on" : ""}">${l}</button>`).join("")}</div>
       ${viewToggleHtml(settings().exView === "text")}</div>
+    ${mySubs() ? "" : `<div class="banner subs-banner"><span>Tell Explore which services you pay for, so it only shows what you can watch.</span><button class="btn small" id="pickSubs">Choose</button></div>`}
+    <div class="provrow">
+      <select id="provSel" aria-label="Service"><option value="All">All services</option></select>
+      <select id="sortSel" aria-label="Sort">${[["popular", "Popular"], ["top", "Top rated"], ["new", "Newest"]].map(([v, l]) => `<option value="${v}" ${ex.sort === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
     <div id="exGrid"></div>`;
   body.querySelectorAll("[data-type]").forEach(b => b.onclick = () => { if (ex.type !== b.dataset.type) { ex.type = b.dataset.type; drawExploreControls(); loadExplore(true); } });
   body.querySelectorAll("[data-view]").forEach(b => b.onclick = () => {
@@ -2093,7 +2110,7 @@ function summaryHtml(show) {
        + tile(airedLeft, "Left to watch", notOut ? `+${notOut} not out yet` : "all are out");
 }
 const MAIN_SERVICES = ["Netflix", "HBO Max", "Disney+", "Prime Video", "Apple TV+", "Peacock", "Paramount+", "Starz", "AMC+", "Crunchyroll",
-  "The Roku Channel", "Tubi", "Pluto TV", "YouTube", "YouTube TV", "Cable / Live TV"];
+  "The Roku Channel", "Tubi", "Pluto TV", "YouTube", "YouTube TV"];
 const OTHER = "__other__";
 function serviceOptions(show) {
   const cur = show.service || "";
