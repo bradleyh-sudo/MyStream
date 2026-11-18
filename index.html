@@ -31,11 +31,23 @@
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{background:var(--bg);color:var(--text)}
 body{font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;-webkit-tap-highlight-color:transparent;
-  padding:env(safe-area-inset-top) 0 calc(env(safe-area-inset-bottom) + 24px);min-height:100vh}
+  padding:0 0 calc(env(safe-area-inset-bottom) + 24px);min-height:100vh}
+.topnav{position:sticky;top:0;z-index:9;background:var(--bg);border-bottom:1px solid var(--line);padding-top:env(safe-area-inset-top)}
+.navin{max-width:720px;margin:0 auto;padding:6px 12px;display:flex;align-items:center;gap:2px;height:52px}
+.navtab{height:38px;padding:0 10px;border-radius:10px;font-size:15px;font-weight:650;color:var(--muted);white-space:nowrap}
+.navtab.on{color:var(--text);background:var(--surface2)}
+.navtab.on::after{content:"";display:block;height:3px;border-radius:3px;background:var(--accent);margin:2px 6px -5px}
+.navspace{flex:1;min-width:4px}
+.navadd{width:38px;height:38px;border-radius:999px;background:var(--accent);color:var(--accent-ink);display:inline-flex;align-items:center;justify-content:center;flex:none}
+.navadd svg{width:20px;height:20px}
+.navadd.on{box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 35%,transparent)}
+.navgear{width:38px;height:38px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;color:var(--text);flex:none;margin-left:4px}
+.navgear svg{width:22px;height:22px}
+.pagetop{height:12px}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 input,select{font:inherit;color:inherit}
 .wrap{max-width:720px;margin:0 auto;padding:0 16px}
-header.bar{position:sticky;top:0;z-index:5;background:var(--bg);padding:14px 0 10px;display:flex;align-items:center;gap:10px}
+header.bar{position:sticky;top:calc(env(safe-area-inset-top) + 53px);z-index:5;background:var(--bg);padding:14px 0 10px;display:flex;align-items:center;gap:10px}
 header.bar h1{font-size:26px;font-weight:750;letter-spacing:-.02em;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:40px;padding:0 16px;border-radius:999px;
   background:var(--accent);color:var(--accent-ink);font-weight:650;white-space:nowrap}
@@ -79,7 +91,7 @@ header.bar h1{font-size:26px;font-weight:750;letter-spacing:-.02em;flex:1;min-wi
 .stat .sm{font-size:12px;color:var(--muted)}
 .bottom-actions{display:flex;flex-direction:column;gap:10px;margin-top:20px}
 .bottom-actions .btn{height:48px}
-body.has-tabs{padding-bottom:calc(env(safe-area-inset-bottom) + 84px)}
+
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:10;display:flex;justify-content:center;gap:4px;background:var(--surface);border-top:1px solid var(--line);
   padding:6px 16px calc(env(safe-area-inset-bottom) + 6px)}
 .tabs[hidden]{display:none}
@@ -123,7 +135,7 @@ a{color:var(--accent)}
 .card.movie.seen .check{background:var(--good);border-color:var(--good);color:#fff}
 .card.movie.seen .check svg{opacity:1}
 .card.movie.seen .name{color:var(--muted)}
-.toolbar{display:flex;align-items:flex-start;gap:10px}
+.toolbar{display:flex;align-items:flex-start;gap:6px}
 .toolbar .chips{flex:1;min-width:0}
 .seg.mini{flex:none;margin:0;padding:2px;border-radius:10px}
 .seg.mini button{width:38px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center}
@@ -266,14 +278,17 @@ a{color:var(--accent)}
 .bulkbar{position:fixed;left:0;right:0;bottom:0;z-index:12;display:flex;gap:8px;justify-content:center;background:var(--surface);border-top:1px solid var(--line);
   padding:8px 16px calc(env(safe-area-inset-bottom) + 8px);box-shadow:0 -4px 16px rgba(0,0,0,.08)}
 .bulkbar[hidden]{display:none}
-body.has-tabs .bulkbar{bottom:calc(env(safe-area-inset-bottom) + 62px);padding-bottom:8px}
+
 body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
 .bb{flex:1;min-width:0;max-width:180px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;border-radius:12px;font-size:13px;font-weight:650;color:var(--text);background:var(--surface2)}
 .bb svg{width:22px;height:22px}
 .bb.danger{color:var(--danger)}
 .bb.wide{max-width:none;flex-direction:row;justify-content:center;gap:8px;height:48px;font-size:16px;background:var(--accent);color:var(--accent-ink)}
 .bb:disabled{opacity:.45}
-.selbtn{height:32px}
+.selbtn{width:40px;height:40px;flex:none}
+.selbtn svg{width:21px;height:21px}
+.toolbar{align-items:center!important;margin-bottom:12px}
+.toolbar select{flex:1 1 0;min-width:0;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:0 8px;font-size:15px;color:var(--text)}
 .selecting [data-show],.selecting [data-movie],.selecting .result{position:relative}
 .selbox{flex:none;width:26px;height:26px;border-radius:999px;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;color:transparent;background:var(--surface)}
 .selbox svg{width:14px;height:14px}
@@ -296,10 +311,11 @@ body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
 .provrow label{font-size:13px;font-weight:650;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
 .provrow{gap:8px!important}
 .provrow select{flex:1 1 0;min-width:0;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:0 8px;font-size:15px;color:var(--text);text-overflow:ellipsis}
-.provrow #provSel{flex-grow:1.25}
+.provrow #provSel{flex-grow:1.15}
+.provrow #sortSel{flex-grow:.95}
 .exhead{display:flex;gap:8px;align-items:center;margin-bottom:12px}
 .exhead .seg{flex:1;margin:0;min-width:0}
-.exhead #sortSel{flex:none;width:106px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:0 8px;font-size:15px;color:var(--text)}
+.exhead #sortSel-unused{flex:none;width:106px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:0 8px;font-size:15px;color:var(--text)}
 .exhead .seg.mini{flex:none}
 .tabtools{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:-4px 0 10px}
 .favrows .row.compact{min-height:44px;padding:4px 8px 4px 12px;gap:8px}
@@ -371,12 +387,18 @@ body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
 </style>
 </head>
 <body>
-<div class="wrap" id="app"></div>
-<nav id="tabs" class="tabs" hidden>
-  <button data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Watching</button>
-  <button data-tab="favorites"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.2-9.4C1.6 7.6 3.9 4.5 7.2 4.5c2 0 3.6 1.1 4.8 2.9 1.2-1.8 2.8-2.9 4.8-2.9 3.3 0 5.6 3.1 4.4 6.6-1.7 4.8-9.2 9.4-9.2 9.4z"/></svg>Favorites</button>
-  <button data-tab="explore"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>Explore</button>
+<nav id="tabs" class="topnav" aria-label="Main">
+  <div class="navin">
+    <button class="navtab" data-tab="home">Watching</button>
+    <button class="navtab" data-tab="favorites">Favorites</button>
+    <button class="navtab" data-tab="explore">Explore</button>
+    <span class="navspace"></span>
+    <button class="navadd" id="addBtn" aria-label="Add show or movie" title="Add show or movie"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button class="navgear" id="menuBtn" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+  </div>
 </nav>
+<div class="wrap" id="app"></div>
+
 <div id="bulkBar" class="bulkbar" hidden></div>
 <div id="overlay"></div>
 <input type="file" id="importFile" accept="application/json,.json" hidden>
@@ -691,10 +713,13 @@ function sheet(html, bind, closeLabel = "Cancel") {
 
 /* ---------- routing ---------- */
 const app = $("#app");
-let filter = "All";
+let filter = "All", genreFilter = "";
 let openSeasons = {}; // showId -> Set of open season numbers
 window.addEventListener("hashchange", render);
-$("#tabs").querySelectorAll("button").forEach(b => b.onclick = () => go(b.dataset.tab === "home" ? "/" : "/" + b.dataset.tab));
+let lastTab = "home";
+$("#tabs").querySelectorAll(".navtab").forEach(b => b.onclick = () => go(b.dataset.tab === "home" ? "/" : "/" + b.dataset.tab));
+$("#addBtn").onclick = () => go("/add");
+$("#menuBtn").onclick = () => openMainMenu();
 function go(hash) { location.hash = hash; }
 let currentRoute = null, prevRoute = null;
 function render() {
@@ -708,9 +733,9 @@ function render() {
   window.scrollTo(0, 0);
   const showMatch = h.match(/^show\/(\d+)$/);
   const tab = h === "explore" || h === "favorites" ? h : h === "add" || showMatch || h.startsWith("join/") ? null : "home";
-  $("#tabs").hidden = !tab;
-  document.body.classList.toggle("has-tabs", !!tab);
-  $("#tabs").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+  if (tab) lastTab = tab;
+  $("#tabs").querySelectorAll(".navtab").forEach(b => b.classList.toggle("on", b.dataset.tab === lastTab));
+  $("#addBtn").classList.toggle("on", h === "add");
   if (h === "add") return renderAdd();
   if (h === "explore") return renderExplore();
   if (h.startsWith("join/")) { const [id, q] = h.slice(5).split("?"); return renderJoin(id, new URLSearchParams(q || "").get("n") || "a shared list"); }
@@ -731,11 +756,14 @@ function renderHome() {
   const shows = Object.values(db.shows).filter(isListed);
   const movies = Object.values(db.movies || {}).filter(isListed);
   const services = [...new Set([...shows, ...movies].map(s => s.service || "No service set"))].sort((a, b) => a.localeCompare(b));
-  const visibleMovies = movies.filter(m => filter === "All" || (m.service || "No service set") === filter)
+  const allGenres = [...new Set([...shows, ...movies].flatMap(x => x.genres || []))].sort((a, b) => a.localeCompare(b));
+  if (genreFilter && !allGenres.includes(genreFilter)) genreFilter = "";
+  const genreOk = x => !genreFilter || (x.genres || []).includes(genreFilter);
+  const visibleMovies = movies.filter(m => (filter === "All" || (m.service || "No service set") === filter) && genreOk(m))
     .sort((a, b) => (a.watched ? 1 : 0) - (b.watched ? 1 : 0) || (b.addedAt || 0) - (a.addedAt || 0));
   if (filter !== "All" && !services.includes(filter)) filter = "All";
 
-  const visible = shows.filter(s => filter === "All" || (s.service || "No service set") === filter);
+  const visible = shows.filter(s => (filter === "All" || (s.service || "No service set") === filter) && genreOk(s));
   const withStats = visible.map(s => ({ s, st: stats(s) }));
   const byName = (a, b) => (a.s.name || "").localeCompare(b.s.name || "");
   const bySoonest = (a, b) => (a.st.upcoming?.stamp || a.st.upcoming?.date || "~").localeCompare(b.st.upcoming?.stamp || b.st.upcoming?.date || "~") || byName(a, b);
@@ -773,8 +801,9 @@ function renderHome() {
         <button class="btn small" id="bannerGo">Sign up</button><button class="x" id="bannerX" aria-label="Dismiss">✕</button></div>` : ""}
     ${shows.length || movies.length ? `
       <div class="toolbar">
-        ${services.length > 1 ? `<div class="chips">${["All", ...services].map(s => `<button class="chip ${s === filter ? "on" : ""}" data-f="${esc(s)}">${esc(s)}</button>`).join("")}</div>` : `<div class="chips"></div>`}
-        ${sel.on ? "" : `<button class="btn ghost small selbtn" id="selStart">Select</button>`}
+        <select id="wSvc" aria-label="Service"><option value="All">Services</option>${services.map(v => `<option value="${esc(v)}" ${v === filter ? "selected" : ""}>${esc(v)}</option>`).join("")}</select>
+        <select id="wGenre" aria-label="Genre"><option value="">Genres</option>${allGenres.map(v => `<option value="${esc(v)}" ${v === genreFilter ? "selected" : ""}>${esc(v)}</option>`).join("")}</select>
+        ${sel.on ? "" : `<button class="icon-btn selbtn" id="selStart" aria-label="Select" title="Select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="6" height="6" rx="1.5"/><path d="M4.5 7l1.2 1.2L8 5.8M12 7h9M3 16.5h6M12 16.5h9"/></svg></button>`}
         ${viewToggle}
       </div>
       ${section("In progress", "", watching)}
@@ -785,7 +814,7 @@ function renderHome() {
       <div class="empty">
         <h2>No shows yet</h2>
         <p>Add the shows you're watching and check off episodes as you go.</p>
-        <button class="btn" id="addBtn2">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add your first show</button>
+        <button class="btn" id="addBtn2">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add your first show or movie</button>
         <p style="margin-top:14px">or <a href="#/explore">explore what's popular</a></p>
       </div>`}
   `;
@@ -813,7 +842,8 @@ function renderHome() {
     $("#bannerGo").onclick = () => openAccountSheet("register");
     $("#bannerX").onclick = () => { settings().hideAcctBanner = true; saveDb(); renderHome(); };
   }
-  app.querySelectorAll(".chip").forEach(c => c.onclick = () => { filter = c.dataset.f; renderHome(); });
+  $("#wSvc") && ($("#wSvc").onchange = e => { filter = e.target.value; renderHome(); });
+  $("#wGenre") && ($("#wGenre").onchange = e => { genreFilter = e.target.value; renderHome(); });
   app.querySelectorAll("[data-view]").forEach(b => b.onclick = () => { settings().view = b.dataset.view; saveDb(); renderHome(); });
   const toggleSel = key => { sel.items.has(key) ? sel.items.delete(key) : sel.items.add(key); renderHome(); };
   app.querySelectorAll("[data-show]").forEach(c => c.onclick = e => {
@@ -977,17 +1007,17 @@ function netProblem(e) {
 }
 
 /* ---------- add ---------- */
-let lastQuery = "", lastResults = null;
+let lastQuery = "", lastResults = null, lastMovies = null;
 function renderAdd() {
   if (!keepSearch) { lastQuery = ""; lastResults = null; searchSeq++; }
   keepSearch = false;
   app.innerHTML = `
     <header class="bar">
       <button class="icon-btn" id="back" aria-label="Back">${ICON.back}</button>
-      <h1>Add a show</h1>
+      <h1>Add a show or movie</h1>
     </header>
     <form class="search" id="searchForm">
-      <input id="q" type="search" placeholder="Show name" autocomplete="off" enterkeyhint="search" value="${esc(lastQuery)}">
+      <input id="q" type="search" placeholder="Show or movie name" autocomplete="off" enterkeyhint="search" value="${esc(lastQuery)}">
       <button class="btn" type="submit">Search</button>
     </form>
     <div id="results"></div>
@@ -1005,23 +1035,39 @@ async function search(text) {
   text = text.trim();
   lastQuery = text;
   const out = $("#results");
-  if (!text) { out.innerHTML = ""; lastResults = null; return; }
+  if (!text) { out.innerHTML = ""; lastResults = null; lastMovies = null; return; }
   const seq = ++searchSeq;
   out.innerHTML = `<div class="spinner"></div>`;
-  try {
-    const res = await api(`/search/shows?q=${encodeURIComponent(text)}`);
-    if (seq !== searchSeq) return;
-    lastResults = res.map(r => r.show);
-    drawResults(lastResults);
-  } catch (e) {
-    if (seq !== searchSeq) return;
-    out.innerHTML = `<div class="err">${netProblem(e)}</div>`;
-  }
+  // TV shows from TVMaze; movies from TMDB (needs the Explore key)
+  const [tv, mv] = await Promise.allSettled([
+    api(`/search/shows?q=${encodeURIComponent(text)}`),
+    tmdbKey() ? tmdb("/search/movie", { query: text, include_adult: "false", language: navigator.language || "en-US" }) : Promise.resolve(null)
+  ]);
+  if (seq !== searchSeq) return;
+  if (tv.status === "rejected" && (mv.status === "rejected" || !mv.value)) { out.innerHTML = `<div class="err">${netProblem(tv.reason)}</div>`; return; }
+  lastResults = tv.status === "fulfilled" ? tv.value.map(r => r.show) : [];
+  lastMovies = mv.status === "fulfilled" && mv.value ? (mv.value.results || []).slice(0, 12) : (tmdbKey() ? [] : null);
+  drawResults(lastResults);
+}
+function movieResultsHtml() {
+  if (lastMovies === null) return `<div class="section-label">Movies</div>
+    <p class="hint">To search movies too, add your free TMDB key in <a href="#" id="mvKey">Settings → Explore settings</a>.</p>`;
+  if (!lastMovies.length) return "";
+  return `<div class="section-label">Movies</div>${pick.on ? `<p class="hint">Select several works for TV shows; add movies one at a time.</p>` : ""}
+    <div class="list">${lastMovies.map((m, i) => {
+      const yr = (m.release_date || "").slice(0, 4);
+      return `<div class="card result mvres" data-mi="${i}" role="button" tabindex="0" aria-label="${esc(m.title)}">
+        ${m.poster_path ? `<img class="poster" src="${IMG}w185${esc(m.poster_path)}" alt="" loading="lazy">` : posterHtml("", m.title)}
+        <div class="meta"><div class="name">${esc(m.title)}</div>
+          <div class="sub">${[yr, "Movie", m.vote_average ? "★ " + m.vote_average.toFixed(1) : ""].filter(Boolean).map(esc).join(" · ")}</div></div>
+        <div class="acts">${heartBtn(isFavTmdb("movie", m), m.title, hearting.has("movie-" + m.id) ? "busy" : "")}${starBtn(inLibrary("movie", m), m.title, starring.has("movie-" + m.id) ? "busy" : "")}</div>
+      </div>`; }).join("")}</div>`;
 }
 function drawResults(list) {
   const out = $("#results");
-  if (!list.length) { out.innerHTML = `<p class="empty">No shows found by that name.</p>`; return; }
-  out.innerHTML = `<div class="results-head">${pick.on
+  if (!list.length && !(lastMovies && lastMovies.length)) { out.innerHTML = `<p class="empty">No shows or movies found by that name.</p>${lastMovies === null ? movieResultsHtml() : ""}`; bindMovieResults(out); return; }
+  if (!list.length) { out.innerHTML = movieResultsHtml(); bindMovieResults(out); return; }
+  out.innerHTML = `${lastMovies && lastMovies.length ? `<div class="section-label">TV shows</div>` : ""}<div class="results-head">${pick.on
       ? `<span>${pick.ids.size} picked</span><button class="btn ghost small" id="pickCancel">Cancel</button>`
       : `<button class="btn ghost small" id="pickStart">Select several</button>`}</div>
     <div class="list ${pick.on ? "selecting" : ""}">${list.map(s => {
@@ -1044,16 +1090,26 @@ function drawResults(list) {
         ${starBtn(have, s.name, adding.has(s.id) ? "busy" : "")}
       </div>
     </div>`;
-  }).join("")}</div>`;
+  }).join("")}</div>${movieResultsHtml()}`;
+  bindMovieResults(out);
   const ps = $("#pickStart"); if (ps) ps.onclick = () => { pick.on = true; pick.ids.clear(); drawResults(list); };
   const pc = $("#pickCancel"); if (pc) pc.onclick = () => { pick.on = false; pick.ids.clear(); $("#bulkBar").hidden = true; document.body.classList.remove("has-bulk"); drawResults(list); };
   if (pick.on) drawPickBar();
-  out.querySelectorAll(".result").forEach(c => c.onclick = e => {
+  out.querySelectorAll(".result:not(.mvres)").forEach(c => c.onclick = e => {
     const id = c.dataset.id;
     if (pick.on) { const n = Number(id); pick.ids.has(n) ? pick.ids.delete(n) : pick.ids.add(n); return drawResults(list); }
     if (e.target.closest("[data-star]")) return toggleShowInList(id);
     if (e.target.closest("[data-heart]")) return toggleShowFav(id);
     go("/show/" + id);
+  });
+}
+function bindMovieResults(out) {
+  const k = out.querySelector("#mvKey"); if (k) k.onclick = e => { e.preventDefault(); openExploreSettings(); };
+  out.querySelectorAll(".mvres").forEach(c => c.onclick = e => {
+    const m = lastMovies[c.dataset.mi]; if (!m || pick.on) return;
+    if (e.target.closest("[data-star]")) return toggleStar("movie", m);
+    if (e.target.closest("[data-heart]")) return toggleHeartTmdb("movie", m);
+    openExploreItem("movie", m.id);
   });
 }
 // Add/remove/favorite a TVMaze show without leaving the page.
@@ -1136,19 +1192,9 @@ function memberSummary(k) {
   return others.length ? "You and " + others.join(", ") : "Just you so far. Invite someone";
 }
 // Same top bar on Watching, Favorites and Explore.
-function topBarHtml(title) {
-  return `<header class="bar">
-      <h1>${esc(title)}</h1>
-      <button class="icon-btn" id="menuBtn" aria-label="Settings">${ICON.gear}</button>
-      <button class="btn" id="addBtn">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add show</button>
-    </header>
-    ${listSwitcherHtml()}`;
-}
-function bindTopBar() {
-  $("#menuBtn") && ($("#menuBtn").onclick = openMainMenu);
-  $("#addBtn") && ($("#addBtn").onclick = () => go("/add"));
-  bindListSwitcher();
-}
+// Tab pages start with the list switcher (only shown once you're in a shared list); the main bar is #tabs.
+function topBarHtml() { return `<div class="pagetop"></div>${listSwitcherHtml()}`; }
+function bindTopBar() { bindListSwitcher(); }
 function listSwitcherHtml() {
   if (!multiList()) return "";   // only once you're in a shared list
   const k = db.active;
@@ -1744,7 +1790,7 @@ async function genres(type) {
   const res = await tmdb(`/genre/${type}/list`, { language: navigator.language || "en-US" });
   return (genreCache[type] = (res.genres || []).sort((a, b) => a.name.localeCompare(b.name)));
 }
-const ex = { type: "tv", prov: "All", genre: "", sort: "popular", page: 1, pages: 1, items: [], seq: 0, error: null, loading: false };
+const ex = { type: "tv", prov: "All", genre: "", sort: "popular", shown: 50, page: 1, pages: 1, items: [], seq: 0, error: null, loading: false };
 
 const reExplore = () => { if (location.hash === "#/explore") renderExplore(); };
 function renderExplore() {
@@ -1810,18 +1856,18 @@ function openExploreSettings() {
 async function drawExploreControls() {
   const body = $("#exBody");
   body.innerHTML = `
-    <div class="exhead"><div class="seg">${[["tv", "TV"], ["movie", "Movies"]].map(([v, l]) => `<button data-type="${v}" class="${ex.type === v ? "on" : ""}">${l}</button>`).join("")}</div>
-      <select id="sortSel" aria-label="Sort">${[["popular", "Popular"], ["top", "Top rated"], ["new", "Newest"]].map(([v, l]) => `<option value="${v}" ${ex.sort === v ? "selected" : ""}>${l}</option>`).join("")}</select>
+    <div class="exhead"><div class="seg">${[["tv", "TV shows"], ["movie", "Movies"]].map(([v, l]) => `<button data-type="${v}" class="${ex.type === v ? "on" : ""}">${l}</button>`).join("")}</div>
       ${viewToggleHtml(settings().exView === "text")}</div>
     <div class="provrow">
-      <select id="provSel" aria-label="Service"><option value="All">All services</option></select>
-      <select id="genreSel" aria-label="Genre"><option value="">All genres</option></select></div>
+      <select id="provSel" aria-label="Service"><option value="All">Services</option></select>
+      <select id="genreSel" aria-label="Genre"><option value="">Genres</option></select>
+      <select id="sortSel" aria-label="Sort">${[["popular", "Popular"], ["top", "Top rated"], ["new", "Newest"]].map(([v, l]) => `<option value="${v}" ${ex.sort === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
     <div id="exGrid"></div>`;
   $("#genreSel").onchange = e => { ex.genre = e.target.value; loadExplore(true); };
   genres(ex.type).then(list => {
     const g = $("#genreSel"); if (!g) return;
     if (ex.genre && !list.some(x => x.name === ex.genre)) ex.genre = "";   // e.g. a movie-only genre after switching to TV
-    g.innerHTML = `<option value="">All genres</option>` + list.map(x => `<option value="${esc(x.name)}" ${x.name === ex.genre ? "selected" : ""}>${esc(x.name)}</option>`).join("");
+    g.innerHTML = `<option value="">Genres</option>` + list.map(x => `<option value="${esc(x.name)}" ${x.name === ex.genre ? "selected" : ""}>${esc(x.name)}</option>`).join("");
   }).catch(() => {});
   body.querySelectorAll("[data-type]").forEach(b => b.onclick = () => { if (ex.type !== b.dataset.type) { ex.type = b.dataset.type; drawExploreControls(); loadExplore(true); } });
   body.querySelectorAll("[data-view]").forEach(b => b.onclick = () => {
@@ -1838,7 +1884,7 @@ async function drawExploreControls() {
     if (!selEl) return;
     const opt = p => `<option value="${esc(p.label)}" ${ex.prov === p.label ? "selected" : ""}>${esc(p.label)}</option>`;
     const vis = visibleProviders(provs), paid = vis.filter(p => !p.free), free = vis.filter(p => p.free);
-    selEl.innerHTML = `<option value="All" ${ex.prov === "All" ? "selected" : ""}>All services</option>
+    selEl.innerHTML = `<option value="All" ${ex.prov === "All" ? "selected" : ""}>Services</option>
       ${paid.length ? `<optgroup label="Subscription">${paid.map(opt).join("")}</optgroup>` : ""}
       ${free.length ? `<optgroup label="Free (with ads or library card)">${free.map(opt).join("")}</optgroup>` : ""}
       <option value="__edit">Edit my services…</option>`;
@@ -1848,9 +1894,11 @@ async function drawExploreControls() {
     };
   } catch {}
 }
+const EXPLORE_BATCH = 50;
 async function loadExplore(reset) {
-  if (reset) { ex.page = 1; ex.items = []; ex.error = null; }
+  if (reset) { ex.page = 0; ex.pages = Infinity; ex.items = []; ex.shown = EXPLORE_BATCH; ex.error = null; }
   const seq = ++ex.seq;
+  if (ex.items.length >= ex.shown || ex.page >= ex.pages) { ex.loading = false; return drawExploreGrid(); }
   ex.loading = true; drawExploreGrid();
   try {
     const provs = await providers(ex.type);
@@ -1858,16 +1906,21 @@ async function loadExplore(reset) {
     const ids = ex.prov === "All" ? vis.flatMap(p => p.ids) : (vis.find(p => p.label === ex.prov) || { ids: [] }).ids;
     const dateField = ex.type === "tv" ? "first_air_date" : "primary_release_date";
     const params = { watch_region: region(), with_watch_providers: ids.join("|"), with_watch_monetization_types: "flatrate|free|ads",
-                     page: ex.page, include_adult: "false", language: navigator.language || "en-US" };
+                     include_adult: "false", language: navigator.language || "en-US" };
     if (ex.genre) { const g = (await genres(ex.type)).find(x => x.name === ex.genre); if (g) params.with_genres = g.id; }
     if (ex.sort === "popular") params.sort_by = "popularity.desc";
     if (ex.sort === "top") { params.sort_by = "vote_average.desc"; params["vote_count.gte"] = ex.type === "tv" ? 200 : 500; }
     if (ex.sort === "new") { params.sort_by = dateField + ".desc"; params[dateField + ".lte"] = today(); params["vote_count.gte"] = 10; }
-    const res = await tmdb(`/discover/${ex.type}`, params);
+    const need = Math.ceil((ex.shown - ex.items.length) / 20);
+    const pageNums = []; for (let n = ex.page + 1; n <= Math.min(ex.page + need, ex.pages); n++) pageNums.push(n);
+    const results = await Promise.all(pageNums.map(n => tmdb(`/discover/${ex.type}`, { ...params, page: n })));
     if (seq !== ex.seq) return;
     const seen = new Set(ex.items.map(i => i.id));
-    ex.items.push(...(res.results || []).filter(i => !seen.has(i.id)));
-    ex.pages = res.total_pages || 1;
+    for (const res of results) {
+      for (const it of res.results || []) if (!seen.has(it.id)) { seen.add(it.id); ex.items.push(it); }
+      ex.pages = Math.min(ex.pages, res.total_pages || 1);
+    }
+    ex.page = pageNums.length ? pageNums[pageNums.length - 1] : ex.page;
     ex.error = null;
   } catch (e) {
     if (seq !== ex.seq) return;
@@ -1902,7 +1955,7 @@ async function addFromTmdb(type, id, d, opts = { listed: true }, listKey) {
     db.movies = db.movies || {};
     const cur = db.movies[id];
     if (cur) { if (opts.listed) cur.listed = true; if (opts.fav) cur.fav = true; }
-    else db.movies[id] = { id: Number(id), title, year, poster: d.poster_path ? IMG + "w185" + d.poster_path : "", service: pickServiceFrom(d), watched: false, addedAt: Date.now(), listed: !!opts.listed, fav: !!opts.fav };
+    else db.movies[id] = { id: Number(id), title, year, genres: (d.genres || []).map(g => g.name), poster: d.poster_path ? IMG + "w185" + d.poster_path : "", service: pickServiceFrom(d), watched: false, addedAt: Date.now(), listed: !!opts.listed, fav: !!opts.fav };
     saveDb();
     return { kind: "movie", id: Number(id), title };
   });
@@ -1928,7 +1981,7 @@ function drawExploreGrid() {
   }
   const type = ex.type;
   const textView = settings().exView === "text";
-  const listHtml = textView ? `<div class="rows exrows">${ex.items.map((it, i) => {
+  const listHtml = textView ? `<div class="rows exrows">${ex.items.slice(0, ex.shown).map((it, i) => {
     const title = it.title || it.name, date = it.release_date || it.first_air_date || "";
     return `<div class="row" data-i="${i}" role="button" tabindex="0">
       ${ex.sort === "popular" ? `<span class="xr">${i + 1}</span>` : ""}
@@ -1939,8 +1992,8 @@ function drawExploreGrid() {
     </div>`;
   }).join("")}</div>` : "";
   grid.innerHTML = textView ? listHtml + `
-  ${ex.loading ? `<div class="spinner"></div>` : ex.page < ex.pages && ex.items.length ? `<button class="btn ghost more" id="exMore">Show more</button>` : ""}
-  ${!ex.loading && !ex.items.length ? `<p class="empty">Nothing found for that filter.</p>` : ""}` : `<div class="grid">${ex.items.map((it, i) => {
+  ${ex.loading ? `<div class="spinner"></div>` : (ex.items.length > ex.shown || ex.page < ex.pages) && ex.items.length ? `<button class="btn ghost more" id="exMore">Show ${EXPLORE_BATCH} more</button>` : ""}
+  ${!ex.loading && !ex.items.length ? `<p class="empty">Nothing found for that filter.</p>` : ""}` : `<div class="grid">${ex.items.slice(0, ex.shown).map((it, i) => {
     const title = it.title || it.name, date = it.release_date || it.first_air_date || "";
     return `<div class="tile" data-i="${i}" role="button" tabindex="0" aria-label="${esc(title)}">
       <div class="art">${it.poster_path ? `<img src="${IMG}w342${esc(it.poster_path)}" alt="" loading="lazy">` : `<span>${esc(title.charAt(0))}</span>`}
@@ -1950,7 +2003,7 @@ function drawExploreGrid() {
       <div class="tt">${esc(title)}</div><div class="ty">${esc(date.slice(0, 4))}${it.vote_average ? ` · ★ ${it.vote_average.toFixed(1)}` : ""}</div>
     </div>`;
   }).join("")}</div>
-  ${ex.loading ? `<div class="spinner"></div>` : ex.page < ex.pages && ex.items.length ? `<button class="btn ghost more" id="exMore">Show more</button>` : ""}
+  ${ex.loading ? `<div class="spinner"></div>` : (ex.items.length > ex.shown || ex.page < ex.pages) && ex.items.length ? `<button class="btn ghost more" id="exMore">Show ${EXPLORE_BATCH} more</button>` : ""}
   ${!ex.loading && !ex.items.length ? `<p class="empty">Nothing found for that filter.</p>` : ""}`;
   grid.querySelectorAll("[data-i]").forEach(b => b.onclick = e => {
     const it = ex.items[b.dataset.i];
@@ -1959,7 +2012,7 @@ function drawExploreGrid() {
     openExploreItem(type, it.id);
   });
   const more = $("#exMore");
-  if (more) more.onclick = () => { ex.page++; loadExplore(false); };
+  if (more) more.onclick = () => { ex.shown += EXPLORE_BATCH; loadExplore(false); };
 }
 async function openExploreItem(type, id) {
   let content;
@@ -2050,14 +2103,14 @@ async function toggleStar(type, it) {
   const entry = libraryEntry(type, it);
   if (entry) return isListed(storeOf(entry.kind)[entry.id]) ? removeItem(entry.kind, entry.id) : addToWatching(entry.kind, entry.id);
   const title = it.title || it.name;
-  starring.add(key); drawExploreGrid();
+  starring.add(key); refresh();
   try {
     await addFromTmdb(type, it.id);
     toast(`Added ${title} to Watching.`);
   } catch (e) {
     toast(e.message === "notfound" ? `Couldn't find episode info for ${title}. Try Add show on the Watching tab.` : `Couldn't add ${title}. Check your connection.`);
   }
-  starring.delete(key); drawExploreGrid();
+  starring.delete(key); refresh();
 }
 const hearting = new Set();
 function isFavTmdb(type, it) {
@@ -2070,14 +2123,14 @@ async function toggleHeartTmdb(type, it) {
   if (multiList()) return openListChooser({ name: it.title || it.name, which: "fav", find: () => libraryEntry(type, it), add: k => addFromTmdb(type, it.id, undefined, { fav: true }, k) });
   const e = libraryEntry(type, it);
   if (e) return setFav(e.kind, e.id, !storeOf(e.kind)[e.id].fav);
-  hearting.add(key); drawExploreGrid();
+  hearting.add(key); refresh();
   try {
     const added = await addFromTmdb(type, it.id, undefined, { fav: true });
     favToast(added.kind, added.id);
   } catch (err) {
     toast(err.message === "notfound" ? `Couldn't find episode info for ${it.title || it.name}.` : `Couldn't add ${it.title || it.name}. Check your connection.`);
   }
-  hearting.delete(key); drawExploreGrid();
+  hearting.delete(key); refresh();
 }
 // Episode tracking uses TVMaze; match the TMDB show to it.
 async function findOnTvMaze(d, title, year) {
