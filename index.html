@@ -1337,6 +1337,21 @@ function bindMovieResults(out) {
     openExploreItem("movie", m.id);
   });
 }
+// "Mark as watched" from a pop-up or preview: on Watching, every aired episode checked, with Undo.
+function markShowWatched(id, wasNew = false) {
+  const show = db.shows[id]; if (!show) return;
+  const before = { watched: { ...(show.watched || {}) }, listed: show.listed, last: show.lastWatchedAt };
+  const eps = regularEps(show).filter(aired);
+  show.watched = show.watched || {};
+  eps.forEach(e => show.watched[e.id] = show.watched[e.id] || Date.now());
+  show.listed = true; show.lastWatchedAt = Date.now();
+  saveDb(); refresh();
+  toast(eps.length ? `Marked all ${eps.length} episodes of ${show.name} as watched.` : `${show.name} added. No episodes have aired yet.`, "Undo", () => {
+    if (wasNew) delete db.shows[id];
+    else { show.watched = before.watched; show.listed = before.listed; show.lastWatchedAt = before.last; }
+    saveDb(); refresh();
+  });
+}
 // Add/remove/favorite a TVMaze show without leaving the page.
 const adding = new Set();
 // opts: { listed: put on Watching, fav: put in Favorites }
@@ -1873,6 +1888,7 @@ async function renderPreview(id) {
     ${info.summary}
     <div class="profile-actions">
       <button class="btn" id="pvAdd">${ICON.star.replace("<svg", '<svg width="18" height="18" class="fillsvg"')} Add to Watching</button>
+      <button class="btn ghost" id="pvWatched">${ICON.check.replace("<svg", '<svg width="18" height="18"')} Mark as watched</button>
       <button class="btn ghost fav-toggle" id="pvFav">${ICON.heart.replace("<svg", '<svg width="18" height="18"')} Add to Favorites</button>
     </div>
     <div class="section-label">Episodes</div>
@@ -1892,6 +1908,11 @@ async function renderPreview(id) {
   };
   $("#pvAdd").onclick = () => multiList() ? toggleShowInList(id) : add(false);
   $("#pvFav").onclick = () => multiList() ? toggleShowFav(id) : add(true);
+  $("#pvWatched").onclick = async () => {
+    const b = $("#pvWatched"); b.disabled = true; b.lastChild.textContent = " Saving…";
+    try { await addTvMaze(id, { listed: true }); markShowWatched(Number(id), true); renderShow(id); window.scrollTo(0, 0); }
+    catch { b.disabled = false; b.lastChild.textContent = " Mark as watched"; toast("Couldn't add that show. Check your connection."); }
+  };
 }
 
 /* ---------- movies on the home list ---------- */
@@ -2274,10 +2295,12 @@ async function openExploreItem(type, id) {
     ${type === "tv"
       ? (show ? (isListed(show) ? "" : `<button class="btn" data-a="listtv">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add to Watching</button>`) + `<button class="btn ${isListed(show) ? "" : "ghost"}" data-a="open">Open show page</button>`
               : `<button class="btn" data-a="addtv">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add to Watching</button><button class="btn ghost" data-a="profile">See full profile</button>`)
+        + `<button class="btn ghost" data-a="watchedtv">${ICON.check.replace("<svg", '<svg width="18" height="18"')} ${show && regularEps(show).filter(aired).length && regularEps(show).filter(aired).every(e => (show.watched || {})[e.id]) ? "Watched ✓" : "Mark as watched"}</button>`
         + `<button class="btn ghost fav-toggle ${show && show.fav ? "on" : ""}" data-a="favtv">${ICON.heart.replace("<svg", '<svg width="18" height="18"')} ${show && show.fav ? "Remove from favorites" : "Add to favorites"}</button>`
       : movie ? `${isListed(movie) ? "" : `<button class="btn" data-a="listmovie">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add to Watching</button>`}<button class="btn ghost fav-toggle ${movie.fav ? "on" : ""}" data-a="fav">${ICON.heart.replace("<svg", '<svg width="18" height="18"')} ${movie.fav ? "Remove from favorites" : "Add to favorites"}</button><button class="btn ghost" data-a="toggle">${movie.watched ? "Mark as not watched" : "Mark as watched"}</button>${isListed(movie) ? `<button class="btn danger" data-a="rmmovie">Remove from Watching</button>` : ""}`
-              : `<button class="btn" data-a="addmovie">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add to Watching</button><button class="btn ghost fav-toggle" data-a="addmoviefav">${ICON.heart.replace("<svg", '<svg width="18" height="18"')} Add to favorites</button>`}`;
+              : `<button class="btn" data-a="addmovie">${ICON.plus.replace("<svg", '<svg width="18" height="18"')} Add to Watching</button><button class="btn ghost" data-a="watchedmovie">${ICON.check.replace("<svg", '<svg width="18" height="18"')} Mark as watched</button><button class="btn ghost fav-toggle" data-a="addmoviefav">${ICON.heart.replace("<svg", '<svg width="18" height="18"')} Add to favorites</button>`}`;
   const btn = a => content.querySelector(`[data-a="${a}"]`);
+  { const pf = btn("profile"); if (pf) pf.parentNode.appendChild(pf); }   // keep "See full profile" last, under the add/watched buttons
   // With more than one list, adding asks which list(s).
   if (multiList()) {
     const item = { id: Number(id), name: title, title, first_air_date: d.first_air_date || "" };
@@ -2304,6 +2327,21 @@ async function openExploreItem(type, id) {
     const b = btn("profile"); b.disabled = true; b.textContent = "Opening…";
     try { const mazeId = await findOnTvMaze(d, title, year); if (!mazeId) throw new Error("notfound"); closeSheet(); go("/show/" + mazeId); }
     catch (e) { b.disabled = false; b.textContent = "See full profile"; content.querySelector("#itemErr").innerHTML = `<div class="err">${e.message === "notfound" ? "<b>Couldn't find this show's profile.</b>" : netProblem(e)}</div>`; }
+  });
+  btn("watchedtv") && (btn("watchedtv").onclick = async () => {
+    const b = btn("watchedtv"); b.disabled = true; b.lastChild.textContent = " Saving…";
+    try {
+      const sid = show ? show.id : (await addFromTmdb("tv", id, d, { listed: true })).id;
+      closeSheet(); markShowWatched(sid, !show);
+    } catch (e) {
+      b.disabled = false; b.lastChild.textContent = " Mark as watched";
+      content.querySelector("#itemErr").innerHTML = `<div class="err">${e.message === "notfound" ? "<b>Couldn't find this show's episode list.</b>" : netProblem(e)}</div>`;
+    }
+  });
+  btn("watchedmovie") && (btn("watchedmovie").onclick = async () => {
+    await addFromTmdb("movie", id, d, { listed: true });
+    db.movies[id].watched = true; saveDb();
+    closeSheet(); refresh(); toast(`${title} added as watched.`, "Undo", () => { delete db.movies[id]; saveDb(); refresh(); });
   });
   btn("toggle") && (btn("toggle").onclick = () => { movie.watched = !movie.watched; saveDb(); closeSheet(); render(); });
   btn("rmmovie") && (btn("rmmovie").onclick = () => { closeSheet(); removeItem("movie", id); });
