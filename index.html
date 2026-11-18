@@ -158,6 +158,15 @@ a{color:var(--accent)}
 .section-label .cols .ch-btn{width:30px}
 .section-label .cols .ch-btn:last-child{margin-right:-6px}
 .section-label.cols-below .cols{flex-basis:100%;justify-content:flex-end}
+/* Drag to reorder on Watching: press and hold a row or card (or drag with a mouse) and slide it within its group */
+[data-group] > *{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+.dragging{position:relative;z-index:6;background:var(--surface);outline:2px solid var(--accent);outline-offset:-2px;box-shadow:0 8px 22px rgba(0,0,0,.28);cursor:grabbing}
+.drag-shift{transition:transform .16s ease}
+body.reordering{-webkit-user-select:none;user-select:none}
+body.reordering,body.reordering *{cursor:grabbing!important}
+[data-group] img{-webkit-user-drag:none;user-drag:none}
+.ordnote{display:flex;justify-content:flex-end;align-items:center;gap:2px;margin:4px 0 -8px;font-size:13px;color:var(--muted)}
+.ordnote .linkish{font-size:13px;padding:4px 2px 4px 6px}
 .star{flex:none;width:36px;height:36px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted)}
 .star svg{width:22px;height:22px;fill:none;stroke:currentColor}
 .star.on{color:var(--accent)}
@@ -630,6 +639,8 @@ function listsBtn(kind, id, label, extra = "") {
 function copyToList(kind, id, key, keepProgress = false) {
   const src = storeOf(kind)[id]; if (!src) return;
   const copy = JSON.parse(JSON.stringify(src));
+  delete copy.ordG; delete copy.ord;   // its place in this list's order doesn't carry over
+  if (!keepProgress) delete copy.onBreak;
   withList(key, () => {
     const store = storeOf(kind), cur = store[id];
     if (cur) { cur.listed = true; if (keepProgress && kind === "show") cur.watched = { ...copy.watched, ...cur.watched }; }
@@ -789,30 +800,44 @@ function goBack() {
 
 /* ---------- home ---------- */
 function hideBulkBar() { const b = $("#bulkBar"); if (b) b.hidden = true; document.body.classList.remove("has-bulk"); }
+// The groups on Watching, each in the order it's shown. keep(x) narrows to a service or genre; leave it out for everything on the list.
+// A group that's been dragged into your own order keeps it (anything that joins the group later goes on top); otherwise each group
+// has its usual sort. The order lives on the items themselves (ordG = group, ord = place), so it syncs with the list.
+const GROUP_TITLES = { progress: "In progress", notstarted: "Haven't started", break: "Taking a break", caught: "Caught up", movies: "To watch", movieswatched: "Watched" };
+const hasOwnOrder = (key, list) => list.some(x => (x.s || x).ordG === key);
+function watchingGroups(keep = () => true) {
+  const mine = (key, list) => {
+    if (!hasOwnOrder(key, list)) return list;
+    const pos = x => (x.s || x).ordG === key ? (x.s || x).ord : -1;
+    return list.map((x, i) => [x, i]).sort((a, b) => pos(a[0]) - pos(b[0]) || a[1] - b[1]).map(a => a[0]);
+  };
+  if (mode() === "movie") {
+    const ms = Object.values(db.movies || {}).filter(isListed).filter(keep);
+    const newest = (a, b) => (b.addedAt || 0) - (a.addedAt || 0);
+    return { movies: mine("movies", ms.filter(m => !m.watched).sort((a, b) => (a.title || "").localeCompare(b.title || "") || newest(a, b))),
+             movieswatched: mine("movieswatched", ms.filter(m => m.watched).sort(newest)) };
+  }
+  const all = Object.values(db.shows).filter(isListed).filter(keep).map(s => ({ s, st: stats(s) }));
+  const byName = (a, b) => (a.s.name || "").localeCompare(b.s.name || "");
+  const bySoonest = (a, b) => (a.st.upcoming?.stamp || a.st.upcoming?.date || "~").localeCompare(b.st.upcoming?.stamp || b.st.upcoming?.date || "~") || byName(a, b);
+  // Shows put on hold from their page ("Take a break") get their own group; everything else is grouped by progress.
+  const active = all.filter(x => !x.s.onBreak);
+  return { progress: mine("progress", active.filter(x => x.st.everWatched && x.st.next).sort((a, b) => (b.s.lastWatchedAt || 0) - (a.s.lastWatchedAt || 0) || byName(a, b))),
+           notstarted: mine("notstarted", active.filter(x => !x.st.everWatched).sort(byName)),
+           break: mine("break", all.filter(x => x.s.onBreak).sort(byName)),
+           caught: mine("caught", active.filter(x => x.st.everWatched && !x.st.next).sort(bySoonest)) };
+}
 function renderHome() {
+  if (drag.st) dragEnd(false);   // the page is being redrawn under a drag: let go
   if (!sel.on) hideBulkBar();
   const shows = mode() === "tv" ? Object.values(db.shows).filter(isListed) : [];
   const movies = mode() === "movie" ? Object.values(db.movies || {}).filter(isListed) : [];
   const services = [...new Set([...shows, ...movies].map(s => s.service || "No service set"))].sort((a, b) => a.localeCompare(b));
   const allGenres = [...new Set([...shows, ...movies].flatMap(x => x.genres || []))].sort((a, b) => a.localeCompare(b));
   if (genreFilter && !allGenres.includes(genreFilter)) genreFilter = "";
-  const genreOk = x => !genreFilter || (x.genres || []).includes(genreFilter);
-  const visibleMovies = movies.filter(m => (filter === "All" || (m.service || "No service set") === filter) && genreOk(m))
-    .sort((a, b) => (a.watched ? 1 : 0) - (b.watched ? 1 : 0) || (b.addedAt || 0) - (a.addedAt || 0));
   if (filter !== "All" && !services.includes(filter)) filter = "All";
-
-  const visible = shows.filter(s => (filter === "All" || (s.service || "No service set") === filter) && genreOk(s));
-  const withStats = visible.map(s => ({ s, st: stats(s) }));
-  const byName = (a, b) => (a.s.name || "").localeCompare(b.s.name || "");
-  const bySoonest = (a, b) => (a.st.upcoming?.stamp || a.st.upcoming?.date || "~").localeCompare(b.st.upcoming?.stamp || b.st.upcoming?.date || "~") || byName(a, b);
-  const otherMovies = visibleMovies;
-  // Shows put on hold from their page ("Take a break") get their own group; everything else is grouped by progress.
-  const onBreak = withStats.filter(x => x.s.onBreak).sort(byName);
-  const active = withStats.filter(x => !x.s.onBreak);
-  const watching = active.filter(x => x.st.everWatched && x.st.next)
-    .sort((a, b) => (b.s.lastWatchedAt || 0) - (a.s.lastWatchedAt || 0) || byName(a, b));
-  const caught = active.filter(x => x.st.everWatched && !x.st.next).sort(bySoonest);
-  const notStarted = active.filter(x => !x.st.everWatched).sort(byName);
+  const G = watchingGroups(x => (filter === "All" || (x.service || "No service set") === filter) && (!genreFilter || (x.genres || []).includes(genreFilter)));
+  const watching = G.progress || [], notStarted = G.notstarted || [], onBreak = G.break || [], caught = G.caught || [];
   const textView = look() === "text";
   // Collapsible groups; which ones are collapsed is a synced setting.
   const collapsed = settings().collapsed || {};
@@ -820,11 +845,13 @@ function renderHome() {
   const colHeads = `<span class="cols"><span>Left</span><span class="ch-new">New ep</span>${multiList() ? `<span class="ch-btn"></span>` : ""}<span class="ch-btn"></span></span>`;
   const head = (key, title, count, cols) => `<button class="section-label sec-head ${cols && !collapsed[key] ? "with-cols" : ""} ${collapsed[key] ? "closed" : ""}" data-sec="${key}" aria-expanded="${!collapsed[key]}">
       <svg class="sec-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>${title} <span class="n">${count}</span>${cols && !collapsed[key] ? colHeads : ""}</button>`;
+  // Shown under a group that's in your own (dragged) order, with the way back to its usual sort.
+  const orderNote = (key, list) => hasOwnOrder(key, list) ? `<div class="ordnote">Your order<button class="linkish" data-reset-order="${key}">Reset</button></div>` : "";
   const section = (title, hint, list, key) => list.length
     ? `${head(key, title, list.length, textView)}${collapsed[key] ? "" : `${hint && !textView ? `<p class="hint">${hint}</p>` : ""}
-       ${textView ? `<div class="rows">${list.map(rowHtml).join("")}</div>` : `<div class="list">${list.map(cardHtml).join("")}</div>`}`}` : "";
+       ${textView ? `<div class="rows" data-group="${key}">${list.map(rowHtml).join("")}</div>` : `<div class="list" data-group="${key}">${list.map(cardHtml).join("")}</div>`}${orderNote(key, list)}`}` : "";
   const movieSection = (title, list, key) => list.length
-    ? `${head(key, title, list.length, false)}${collapsed[key] ? "" : textView ? `<div class="rows">${list.map(movieRowHtml).join("")}</div>` : `<div class="list">${list.map(movieCardHtml).join("")}</div>`}` : "";
+    ? `${head(key, title, list.length, false)}${collapsed[key] ? "" : `${textView ? `<div class="rows" data-group="${key}">${list.map(movieRowHtml).join("")}</div>` : `<div class="list" data-group="${key}">${list.map(movieCardHtml).join("")}</div>`}${orderNote(key, list)}`}` : "";
   // Caught up: optional "Hide ended" (shows that have finished airing for good)
   const hideEnded = !!settings().hideEnded;
   const endedCount = caught.filter(x => x.s.status === "Ended").length;
@@ -833,7 +860,7 @@ function renderHome() {
     ${head("caught", "Caught up", caughtShown.length, textView && caughtShown.length)}
     ${collapsed.caught ? "" : `${endedCount ? `<div class="sec-tools"><label class="tog"><input type="checkbox" id="hideEnded" ${hideEnded ? "checked" : ""}><span class="track"></span>Hide ended shows</label>
       ${hideEnded ? `<span class="sub">${endedCount} hidden</span>` : ""}</div>` : ""}
-    ${caughtShown.length ? (textView ? `<div class="rows">${caughtShown.map(rowHtml).join("")}</div>` : `<div class="list">${caughtShown.map(cardHtml).join("")}</div>`) : ""}`}`;
+    ${caughtShown.length ? (textView ? `<div class="rows" data-group="caught">${caughtShown.map(rowHtml).join("")}</div>` : `<div class="list" data-group="caught">${caughtShown.map(cardHtml).join("")}</div>`) : ""}${orderNote("caught", caughtShown)}`}`;
 
   app.innerHTML = `
     ${sel.on ? `<header class="bar">
@@ -855,8 +882,8 @@ function renderHome() {
         ${section("Haven't started", "Saved for later. Check off an episode and it moves up to In progress.", notStarted, "notstarted")}
         ${section("Taking a break", "On hold, with your progress kept. Open a show and tap Watching to pick it back up.", onBreak, "break")}
         ${caughtSection}` : `
-        ${movieSection("To watch", otherMovies.filter(m => !m.watched).sort((a, b) => (a.title || "").localeCompare(b.title || "")), "movies")}
-        ${movieSection("Watched", otherMovies.filter(m => m.watched), "movieswatched")}`}
+        ${movieSection("To watch", G.movies || [], "movies")}
+        ${movieSection("Watched", G.movieswatched || [], "movieswatched")}`}
     ` : `
       <div class="empty">
         <h2>${mode() === "movie" ? "No movies yet" : "No shows yet"}</h2>
@@ -869,6 +896,7 @@ function renderHome() {
   // If the column headings don't fit beside one section's title (narrow phone, long title), put them on their own line in every section so they match.
   const colHeadSecs = [...app.querySelectorAll(".sec-head.with-cols")];
   if (colHeadSecs.some(h => h.querySelector(".cols").offsetTop > h.querySelector(".n").offsetTop + 8)) colHeadSecs.forEach(h => h.classList.add("cols-below"));
+  app.querySelectorAll("[data-reset-order]").forEach(b => b.onclick = () => resetGroupOrder(b.dataset.resetOrder));
   $("#addBtn2") && ($("#addBtn2").onclick = () => go("/add"));
   $("#hideEnded") && ($("#hideEnded").onchange = e => { settings().hideEnded = e.target.checked; saveDb(); renderHome(); });
   $("#selStart") && ($("#selStart").onclick = () => { sel.on = true; sel.items.clear(); renderHome(); });
@@ -918,6 +946,114 @@ function renderHome() {
   // quietly refresh stale shows (new episodes) in the background
   backgroundRefresh();
 }
+
+/* ---------- drag to reorder (Watching) ---------- */
+// Press and hold a show or movie, then slide it up or down within its group; with a mouse, just drag.
+// Nothing in the page is moved while you drag: the others slide aside with transforms, and the new order is saved when you let go.
+const drag = { st: 0 };   // st: 0 idle, 1 pressed (not picked up yet), 2 dragging
+const HOLD_MS = 350, SLOP = 8;
+function dragStart() {
+  const d = drag;
+  d.items = [...d.item.parentElement.children].filter(c => c.matches("[data-show],[data-movie]"));
+  d.from = d.to = d.items.indexOf(d.item);
+  d.geo = d.items.map(el => { const r = el.getBoundingClientRect(); return { top: r.top + window.scrollY, h: r.height }; });
+  d.gap = d.geo[1].top - d.geo[0].top - d.geo[0].h;
+  d.grab = d.y + window.scrollY - d.geo[d.from].top;
+  d.st = 2;
+  d.item.classList.add("dragging");
+  d.items.forEach(el => el !== d.item && el.classList.add("drag-shift"));
+  document.body.classList.add("reordering");
+  try { app.setPointerCapture(d.id); } catch {}
+  if (d.touch && navigator.vibrate) navigator.vibrate(8);
+  dragMove();
+  d.raf = requestAnimationFrame(dragTick);
+}
+function dragMove() {
+  const d = drag, g = d.geo, me = g[d.from], last = g[g.length - 1];
+  const top = Math.max(g[0].top, Math.min(last.top + last.h - me.h, d.y + window.scrollY - d.grab));   // stays inside its group
+  // It trades places with a neighbour once its leading edge is past that neighbour's middle.
+  let to = d.from;
+  for (let i = d.from + 1; i < g.length && top + me.h > g[i].top + g[i].h / 2; i++) to = i;
+  for (let i = d.from - 1; i >= 0 && top < g[i].top + g[i].h / 2; i--) to = i;
+  d.to = to;
+  d.item.style.transform = `translateY(${top - me.top}px)`;
+  d.items.forEach((el, i) => {
+    if (i === d.from) return;
+    const shift = d.from < to && i > d.from && i <= to ? -(me.h + d.gap) : d.from > to && i >= to && i < d.from ? me.h + d.gap : 0;
+    el.style.transform = shift ? `translateY(${shift}px)` : "";
+  });
+}
+function dragTick() {   // near the top or bottom of the screen the page scrolls along
+  const d = drag;
+  if (d.st !== 2) return;
+  if (!d.item.isConnected) return dragEnd(false);
+  const hi = $("#tabs").getBoundingClientRect().bottom + 56, lo = window.innerHeight - 72;
+  const v = !d.moved ? 0 : d.y < hi ? -Math.min(16, (hi - d.y) / 4 + 2) : d.y > lo ? Math.min(16, (d.y - lo) / 4 + 2) : 0;
+  if (v) { const y = window.scrollY; window.scrollBy(0, v); if (window.scrollY !== y) dragMove(); }
+  d.raf = requestAnimationFrame(dragTick);
+}
+function dragEnd(commit) {
+  const d = drag, was = d.st;
+  clearTimeout(d.timer); cancelAnimationFrame(d.raf);
+  d.st = 0;
+  if (was !== 2) return;
+  document.body.classList.remove("reordering");
+  try { app.releasePointerCapture(d.id); } catch {}
+  d.dropped = Date.now(); d.droppedItem = d.item;
+  if (commit && d.to !== d.from && d.item.isConnected) {
+    const ids = d.items.map(el => el.dataset.show || el.dataset.movie);
+    ids.splice(d.to, 0, ids.splice(d.from, 1)[0]);
+    return saveGroupOrder(d.item.parentElement.dataset.group, ids);   // redraws the page
+  }
+  d.items.forEach(el => { el.classList.remove("dragging", "drag-shift"); el.style.transform = ""; });
+}
+// Save a group's order after a drag. ids = what's on screen, in its new order; anything hidden by a filter keeps its place.
+function saveGroupOrder(key, ids) {
+  const full = (watchingGroups()[key] || []).map(x => x.s || x);
+  const byId = new Map(full.map(it => [String(it.id), it]));
+  const queue = ids.map(id => byId.get(String(id))).filter(Boolean), shown = new Set(queue);
+  full.map(it => shown.has(it) ? queue.shift() : it).forEach((it, i) => { it.ordG = key; it.ord = i; });
+  saveDb(); renderHome();
+}
+function resetGroupOrder(key) {   // also clears places kept by items that have since left the group, so they don't bring the order back
+  const before = [...Object.values(db.shows), ...Object.values(db.movies || {})].filter(it => it.ordG === key).map(it => [it, it.ord]);
+  before.forEach(([it]) => { delete it.ordG; delete it.ord; });
+  saveDb(); renderHome();
+  toast(`${GROUP_TITLES[key]} is back in its usual order.`, "Undo", () => { before.forEach(([it, o]) => { it.ordG = key; it.ord = o; }); saveDb(); refresh(); });
+}
+app.addEventListener("pointerdown", e => {
+  if (drag.st || !e.isPrimary || (e.pointerType === "mouse" && e.button !== 0) || sel.on) return;
+  const item = e.target.closest("[data-group] > [data-show], [data-group] > [data-movie]");
+  if (!item || e.target.closest("button") || item.parentElement.children.length < 2) return;   // not from the star/tick buttons; needs something to trade places with
+  clearTimeout(drag.timer);
+  Object.assign(drag, { st: 1, item, id: e.pointerId, touch: e.pointerType !== "mouse", x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, moved: false });
+  if (drag.touch) drag.timer = setTimeout(() => { if (drag.st === 1 && drag.item.isConnected) dragStart(); else drag.st = 0; }, HOLD_MS);
+});
+window.addEventListener("pointermove", e => {
+  const d = drag;
+  if (!d.st || e.pointerId !== d.id) return;
+  d.x = e.clientX; d.y = e.clientY;
+  const far = Math.hypot(d.x - d.x0, d.y - d.y0) > SLOP;
+  if (d.st === 1) {
+    if (!far) return;
+    if (d.touch) return dragEnd(false);   // the finger moved before the hold was up: that's a scroll, not a drag
+    dragStart();                          // a mouse starts dragging as soon as it moves
+  }
+  if (far) d.moved = true;
+  dragMove();
+});
+window.addEventListener("pointerup", e => { if (drag.st && e.pointerId === drag.id) dragEnd(true); });
+window.addEventListener("pointercancel", e => { if (drag.st && e.pointerId === drag.id) dragEnd(false); });
+window.addEventListener("scroll", () => { if (drag.st === 2) dragMove(); }, { passive: true });
+window.addEventListener("keydown", e => { if (e.key === "Escape" && drag.st) dragEnd(false); });
+app.addEventListener("touchmove", e => { if (drag.st === 2) e.preventDefault(); }, { passive: false });   // while dragging, the finger moves the item, not the page
+app.addEventListener("contextmenu", e => { if (drag.st) e.preventDefault(); });
+app.addEventListener("dragstart", e => { if (e.target.closest && e.target.closest("[data-group]")) e.preventDefault(); });   // no browser drag-ghost of posters
+window.addEventListener("click", e => {   // letting go of a drag isn't a tap on the item
+  const ago = Date.now() - (drag.dropped || 0);
+  if (ago < 150 || (ago < 450 && drag.droppedItem && drag.droppedItem.contains(e.target))) { drag.dropped = 0; e.stopPropagation(); e.preventDefault(); }
+}, true);
+
 function airLabel(e) {
   if (!e.date) return "date not announced yet";
   const d = new Date(e.date + "T12:00:00"), now = new Date();
