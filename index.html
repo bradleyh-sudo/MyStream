@@ -308,6 +308,7 @@ body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
 .field .subpick input{width:18px;height:18px;padding:0;border:0;accent-color:var(--accent);flex:none}
 .subpick span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .subpick:has(input:checked){border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--surface))}
+.catedit{justify-content:flex-start;margin:-2px 0 10px}
 .count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;align-self:flex-start;padding-top:2px}
 .empty{text-align:center;color:var(--muted);padding:56px 16px}
 .empty h2{color:var(--text);font-size:20px;margin-bottom:6px}
@@ -1419,8 +1420,9 @@ function renderFavorites() {
         ${none && cats.length ? `<button class="chip ${favFilter === "None" ? "on" : ""}" data-cat="None">No category <span class="cn">${none}</span></button>` : ""}
         <button class="chip add-cat" id="newCat" aria-label="New category">+ New</button>
       </div>
+      ${cats.includes(favFilter) ? `<div class="tabtools catedit"><button class="btn ghost small" id="editCat">${shown.length ? "Add or remove favorites" : `Add favorites to ${esc(favFilter)}`}</button></div>` : ""}
       ${shown.length ? `<div class="rows favrows">${shown.map(favRowHtml).join("")}</div>`
-        : `<p class="empty">Nothing in ${esc(favFilter === "None" ? "No category" : favFilter)} yet. Tap <b>Category</b> on a favorite to add it.</p>`}
+        : `<p class="empty">Nothing in ${esc(favFilter === "None" ? "No category" : favFilter)} yet.</p>`}
     ` : `
       <div class="empty">
         <h2>No favorites yet</h2>
@@ -1430,7 +1432,8 @@ function renderFavorites() {
   bindTopBar();
   $("#favPick") && ($("#favPick").onclick = () => pickFavorite(favFilter === "None" ? "All" : favFilter));
   app.querySelectorAll("[data-cat]").forEach(b => b.onclick = () => { favFilter = b.dataset.cat; renderFavorites(); });
-  $("#newCat") && ($("#newCat").onclick = () => newCategory(c => { favFilter = c; renderFavorites(); }));
+  $("#newCat") && ($("#newCat").onclick = () => newCategory(c => { favFilter = c; renderFavorites(); openCategoryMembers(c); }));
+  $("#editCat") && ($("#editCat").onclick = () => openCategoryMembers(favFilter));
   app.querySelectorAll(".favrow").forEach(r => r.onclick = e => {
     const { kind, id } = r.dataset;
     if (e.target.closest("[data-heart]")) return setFav(kind, id, false);
@@ -1455,6 +1458,30 @@ function favRowHtml(f) {
     </div>
     ${heartBtn(true, f.name)}
   </div>`;
+}
+// Tick which favorites belong in a category.
+function openCategoryMembers(cat) {
+  const favs = allFavorites();
+  if (!favs.length) return;
+  sheet(`
+    <h3>What goes in ${esc(cat)}?</h3>
+    <p>Tick the favorites that belong here. A show can be in more than one category.</p>
+    <div class="catlist">${favs.map(f => `<label class="catopt"><input type="checkbox" data-kind="${f.kind}" data-id="${f.id}" ${(f.it.favCats || []).includes(cat) ? "checked" : ""}>
+      <span>${esc(f.name)}</span></label>`).join("")}</div>
+    <button class="btn" data-a="save">Save</button>
+  `, (m, close) => {
+    m.querySelector('[data-a="save"]').onclick = () => {
+      let n = 0;
+      m.querySelectorAll(".catopt input").forEach(cb => {
+        const it = favItem(cb.dataset.kind, cb.dataset.id); if (!it) return;
+        const set = new Set(it.favCats || []);
+        cb.checked ? set.add(cat) : set.delete(cat);
+        it.favCats = favCategories().filter(c => set.has(c));
+        if (cb.checked) n++;
+      });
+      saveDb(); close(); refresh(); toast(`${n} favorite${n === 1 ? "" : "s"} in ${cat}.`);
+    };
+  });
 }
 function newCategory(done) {
   sheet(`
