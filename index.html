@@ -827,16 +827,42 @@ function watchingGroups(keep = () => true) {
            break: mine("break", all.filter(x => x.s.onBreak).sort(byName)),
            caught: mine("caught", active.filter(x => x.st.everWatched && !x.st.next).sort(bySoonest)) };
 }
+// Many small genres -> a short list of broad ones.
+const GENRE_GROUPS = [
+  ["Comedy", /^(comedy|sitcom|satire|parody|stand-?up)$/i],
+  ["Drama", /^(drama|legal|medical|soap|soap opera)$/i],
+  ["Crime & Mystery", /^(crime|mystery|thriller|espionage|suspense|detective)$/i],
+  ["Action & Adventure", /^(action|adventure|action & adventure|war|war & politics|western|martial arts|disaster)$/i],
+  ["Sci-Fi & Fantasy", /^(science[- ]fiction|sci-fi|sci-fi & fantasy|fantasy|supernatural)$/i],
+  ["Horror", /^horror$/i],
+  ["Romance", /^romance$/i],
+  ["Kids & Family", /^(children|kids|family)$/i],
+  ["Animation", /^(animation|anime)$/i],
+  ["Reality & Talk", /^(reality|game show|talk|talk show|food|travel|news|tv movie)$/i],
+  ["Documentary", /^(documentary|history|nature)$/i],
+  ["Sports", /^sports?$/i],
+  ["Music", /^(music|musical)$/i]
+];
+const GENRE_ORDER = GENRE_GROUPS.map(g => g[0]);
+const genreGroup = name => (GENRE_GROUPS.find(([, re]) => re.test(String(name).trim())) || ["Other"])[0];
+const groupsOf = x => [...new Set((x.genres || []).map(genreGroup))];
+const byGenreOrder = (a, b) => (GENRE_ORDER.indexOf(a) + 1 || 99) - (GENRE_ORDER.indexOf(b) + 1 || 99);
 function renderHome() {
   if (drag.st) dragEnd(false);   // the page is being redrawn under a drag: let go
   if (!sel.on) hideBulkBar();
   const shows = mode() === "tv" ? Object.values(db.shows).filter(isListed) : [];
   const movies = mode() === "movie" ? Object.values(db.movies || {}).filter(isListed) : [];
   const services = [...new Set([...shows, ...movies].map(s => s.service || "No service set"))].sort((a, b) => a.localeCompare(b));
-  const allGenres = [...new Set([...shows, ...movies].flatMap(x => x.genres || []))].sort((a, b) => a.localeCompare(b));
+  const allGenres = [...new Set([...shows, ...movies].flatMap(groupsOf))].sort(byGenreOrder);
   if (genreFilter && !allGenres.includes(genreFilter)) genreFilter = "";
-  if (filter !== "All" && !services.includes(filter)) filter = "All";
-  const G = watchingGroups(x => (filter === "All" || (x.service || "No service set") === filter) && (!genreFilter || (x.genres || []).includes(genreFilter)));
+  const genreOk = x => !genreFilter || groupsOf(x).includes(genreFilter);
+  // Services: only the ones you picked in Settings (if you have), everything else under "Other services".
+  const mine = mySubs() ? new Set([...mySubs(), ...myFree()]) : null;
+  const svcOf = x => x.service || "No service set";
+  if (filter === "__other" && !mine) filter = "All";
+  if (filter !== "All" && filter !== "__other" && !services.includes(filter)) filter = "All";
+  const svcOk = x => filter === "All" || (filter === "__other" ? (mine && !mine.has(svcOf(x))) : svcOf(x) === filter);
+  const G = watchingGroups(x => svcOk(x) && genreOk(x));
   const watching = G.progress || [], notStarted = G.notstarted || [], onBreak = G.break || [], caught = G.caught || [];
   const textView = look() === "text";
   // Collapsible groups; which ones are collapsed is a synced setting.
@@ -873,7 +899,8 @@ function renderHome() {
         <button class="btn small" id="bannerGo">Sign up</button><button class="x" id="bannerX" aria-label="Dismiss">✕</button></div>` : ""}
     ${shows.length || movies.length ? `
       <div class="toolbar">
-        <select id="wSvc" aria-label="Service"><option value="All">Services</option>${services.map(v => `<option value="${esc(v)}" ${v === filter ? "selected" : ""}>${esc(v)}</option>`).join("")}</select>
+        <select id="wSvc" aria-label="Service"><option value="All">Services</option>${(mine ? services.filter(v => mine.has(v)) : services).map(v => `<option value="${esc(v)}" ${v === filter ? "selected" : ""}>${esc(v)}</option>`).join("")}
+          ${mine && services.some(v => !mine.has(v)) ? `<option value="__other" ${filter === "__other" ? "selected" : ""}>Other services</option>` : ""}</select>
         <select id="wGenre" aria-label="Genre"><option value="">Genres</option>${allGenres.map(v => `<option value="${esc(v)}" ${v === genreFilter ? "selected" : ""}>${esc(v)}</option>`).join("")}</select>
         ${sel.on ? "" : `<button class="icon-btn selbtn" id="selStart" aria-label="Select" title="Select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="6" height="6" rx="1.5"/><path d="M4.5 7l1.2 1.2L8 5.8M12 7h9M3 16.5h6M12 16.5h9"/></svg></button>`}
       </div>
@@ -2069,8 +2096,9 @@ async function drawExploreControls() {
   $("#genreSel").onchange = e => { ex.genre = e.target.value; loadExplore(true); };
   genres(ex.type).then(list => {
     const g = $("#genreSel"); if (!g) return;
-    if (ex.genre && !list.some(x => x.name === ex.genre)) ex.genre = "";   // e.g. a movie-only genre after switching to TV
-    g.innerHTML = `<option value="">Genres</option>` + list.map(x => `<option value="${esc(x.name)}" ${x.name === ex.genre ? "selected" : ""}>${esc(x.name)}</option>`).join("");
+    const groups = [...new Set(list.map(x => genreGroup(x.name)))].sort(byGenreOrder);
+    if (ex.genre && !groups.includes(ex.genre)) ex.genre = "";
+    g.innerHTML = `<option value="">Genres</option>` + groups.map(n => `<option value="${esc(n)}" ${n === ex.genre ? "selected" : ""}>${esc(n)}</option>`).join("");
   }).catch(() => {});
 
   $("#sortSel").onchange = e => { ex.sort = e.target.value; loadExplore(true); };
@@ -2105,7 +2133,7 @@ async function loadExplore(reset) {
     const dateField = ex.type === "tv" ? "first_air_date" : "primary_release_date";
     const params = { watch_region: region(), with_watch_providers: ids.join("|"), with_watch_monetization_types: "flatrate|free|ads",
                      include_adult: "false", language: navigator.language || "en-US" };
-    if (ex.genre) { const g = (await genres(ex.type)).find(x => x.name === ex.genre); if (g) params.with_genres = g.id; }
+    if (ex.genre) { const ids = (await genres(ex.type)).filter(x => genreGroup(x.name) === ex.genre).map(x => x.id); if (ids.length) params.with_genres = ids.join("|"); }
     if (ex.sort === "popular") params.sort_by = "popularity.desc";
     if (ex.sort === "top") { params.sort_by = "vote_average.desc"; params["vote_count.gte"] = ex.type === "tv" ? 200 : 500; }
     if (ex.sort === "new") { params.sort_by = dateField + ".desc"; params[dateField + ".lte"] = today(); params["vote_count.gte"] = 10; }
