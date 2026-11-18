@@ -350,6 +350,13 @@ body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
 .search{display:flex;gap:8px;margin-bottom:14px}
 .search input{flex:1;min-width:0;height:44px;border-radius:12px;border:1px solid var(--line);background:var(--surface);padding:0 14px;font-size:17px}
 .search input:focus,.field input:focus{outline:2px solid var(--accent);outline-offset:-1px}
+/* Add screen: search box with its own ✕ (clear) button, since phones don't show the browser's */
+.qbox{position:relative;flex:1;min-width:0;display:flex}
+.search .qbox input{padding-right:42px}
+.qbox input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none;display:none}
+.qclear{position:absolute;top:0;right:0;width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:var(--muted)}
+.qclear[hidden]{display:none}
+.qclear svg{width:20px;height:20px}
 .result .btn{flex:none}
 .sub{font-size:14px;color:var(--muted)}
 .hero{display:flex;gap:14px;margin:4px 0 16px}
@@ -589,7 +596,8 @@ const ICON = {
   heart: '<svg viewBox="0 0 24 24" stroke-width="2" stroke-linejoin="round"><path d="M12 20.5s-7.5-4.6-9.2-9.4C1.6 7.6 3.9 4.5 7.2 4.5c2 0 3.6 1.1 4.8 2.9 1.2-1.8 2.8-2.9 4.8-2.9 3.3 0 5.6 3.1 4.4 6.6-1.7 4.8-9.2 9.4-9.2 9.4z"/></svg>',
   dice: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9" r="1.2" fill="currentColor"/><circle cx="15" cy="15" r="1.2" fill="currentColor"/><circle cx="15" cy="9" r="1.2" fill="currentColor"/><circle cx="9" cy="15" r="1.2" fill="currentColor"/></svg>',
   star: '<svg viewBox="0 0 24 24" stroke-width="2" stroke-linejoin="round"><path d="M12 3.3l2.7 5.5 6 .9-4.35 4.2 1.03 6L12 17.05 6.62 19.9l1.03-6L3.3 9.7l6-.9z"/></svg>',
-  chev: '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>'
+  chev: '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7"/></svg>',
+  clear: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="M8.6 8.6l6.8 6.8M15.4 8.6l-6.8 6.8" fill="none" stroke="var(--surface)" stroke-width="2.2" stroke-linecap="round"/></svg>'
 };
 
 /* ---------- service badges (simple colored monograms, not official logos) ---------- */
@@ -742,7 +750,7 @@ $("#modeSeg").querySelectorAll("[data-mode]").forEach(b => b.onclick = () => {
   settings().mode = b.dataset.mode; saveDb(); drawModeSeg();
   sel.on = false; sel.items.clear(); pick.on = false; pick.ids.clear();
   const h = location.hash.replace(/^#\/?/, "");
-  if (h === "add") { const q = lastQuery; keepSearch = false; renderAdd(); if (q) { $("#q").value = q; search(q); } }
+  if (h === "add") { const q = lastQuery; keepSearch = false; renderAdd(); if (q) { $("#q").value = q; syncSearchClear(); search(q); } }
   else render();
 });
 $("#tabs").querySelectorAll(".navtab").forEach(b => b.onclick = () => go(b.dataset.tab === "home" ? "/" : "/" + b.dataset.tab));
@@ -1061,26 +1069,35 @@ function renderAdd() {
       <h1>${mode() === "movie" ? "Add a movie" : "Add a show"}</h1>
     </header>
     <form class="search" id="searchForm">
-      <input id="q" type="search" placeholder="${mode() === "movie" ? "Movie name" : "Show name"}" autocomplete="off" enterkeyhint="search" value="${esc(lastQuery)}">
+      <div class="qbox">
+        <input id="q" type="search" placeholder="${mode() === "movie" ? "Movie name" : "Show name"}" autocomplete="off" enterkeyhint="search" value="${esc(lastQuery)}">
+        <button class="qclear" id="qClear" type="button" aria-label="Clear search" title="Clear" hidden>${ICON.clear}</button>
+      </div>
       <button class="btn" type="submit">Search</button>
     </form>
     <div id="results"></div>
   `;
   $("#back").onclick = () => go("/");
-  const q = $("#q");
+  const q = $("#q"), clearBtn = $("#qClear");
   setTimeout(() => q.focus(), 50);
   let timer;
-  q.oninput = () => { clearTimeout(timer); timer = setTimeout(() => search(q.value), 350); };
+  q.oninput = () => { syncSearchClear(); clearTimeout(timer); timer = setTimeout(() => search(q.value), 350); };
   $("#searchForm").onsubmit = e => { e.preventDefault(); clearTimeout(timer); search(q.value); q.blur(); };
+  // ✕ empties the box and the results, and leaves the keyboard up for the next search.
+  clearBtn.onpointerdown = clearBtn.onmousedown = e => e.preventDefault();   // don't take focus from the box
+  clearBtn.onclick = () => { clearTimeout(timer); q.value = ""; syncSearchClear(); search(""); q.focus(); };
+  syncSearchClear();
   if (lastResults) drawResults(lastResults);
 }
+// The ✕ in the search box only shows while there's something to clear.
+function syncSearchClear() { const q = $("#q"), x = $("#qClear"); if (q && x) x.hidden = !q.value; }
 let searchSeq = 0;
 async function search(text) {
   text = text.trim();
   lastQuery = text;
   const out = $("#results");
+  const seq = ++searchSeq;   // also drops a search still on its way when the box is cleared
   if (!text) { out.innerHTML = ""; lastResults = null; lastMovies = null; return; }
-  const seq = ++searchSeq;
   out.innerHTML = `<div class="spinner"></div>`;
   // TV shows from TVMaze; movies from TMDB (needs the Explore key)
   const [tv, mv] = await Promise.allSettled([
