@@ -280,6 +280,14 @@ body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
 .selecting .star,.selecting .heart,.selecting .lists-btn,.selecting .check{pointer-events:none;opacity:.35}
 .results-head{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin:-4px 0 10px;font-size:14px;color:var(--muted);font-weight:600}
 .results-head span{margin-right:auto}
+.sec-tools{display:flex;align-items:center;gap:10px;margin:-2px 0 10px}
+.tog{display:inline-flex;align-items:center;gap:8px;font-size:14px;font-weight:600;cursor:pointer;user-select:none}
+.tog input{position:absolute;opacity:0;width:0;height:0}
+.tog .track{position:relative;width:38px;height:22px;border-radius:999px;background:var(--line);transition:background .15s;flex:none}
+.tog .track::after{content:"";position:absolute;left:2px;top:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
+.tog input:checked + .track{background:var(--accent)}
+.tog input:checked + .track::after{transform:translateX(16px)}
+.tog input:focus-visible + .track{outline:2px solid var(--accent);outline-offset:2px}
 .count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;align-self:flex-start;padding-top:2px}
 .empty{text-align:center;color:var(--muted);padding:56px 16px}
 .empty h2{color:var(--text);font-size:20px;margin-bottom:6px}
@@ -696,6 +704,15 @@ function renderHome() {
   const section = (title, hint, list) => list.length
     ? `<div class="section-label ${textView ? "with-cols" : ""}">${title} <span class="n">${list.length}</span>${textView ? `<span class="cols"><span>Left</span><span>New ep</span></span>` : ""}</div>${hint && !textView ? `<p class="hint">${hint}</p>` : ""}
        ${textView ? `<div class="rows">${list.map(rowHtml).join("")}</div>` : `<div class="list">${list.map(cardHtml).join("")}</div>`}` : "";
+  // Caught up: optional "Hide ended" (shows that have finished airing for good)
+  const hideEnded = !!settings().hideEnded;
+  const endedCount = caught.filter(x => x.s.status === "Ended").length;
+  const caughtShown = hideEnded ? caught.filter(x => x.s.status !== "Ended") : caught;
+  const caughtSection = !caught.length ? "" : `
+    <div class="section-label ${textView && caughtShown.length ? "with-cols" : ""}">Caught up <span class="n">${caughtShown.length}</span>${textView && caughtShown.length ? `<span class="cols"><span>Left</span><span>New ep</span></span>` : ""}</div>
+    ${endedCount ? `<div class="sec-tools"><label class="tog"><input type="checkbox" id="hideEnded" ${hideEnded ? "checked" : ""}><span class="track"></span>Hide ended shows</label>
+      ${hideEnded ? `<span class="sub">${endedCount} hidden</span>` : ""}</div>` : ""}
+    ${caughtShown.length ? (textView ? `<div class="rows">${caughtShown.map(rowHtml).join("")}</div>` : `<div class="list">${caughtShown.map(cardHtml).join("")}</div>`) : ""}`;
   const viewToggle = `<div class="seg mini" role="group" aria-label="View">
       <button data-view="cards" class="${textView ? "" : "on"}" aria-label="Cards view" title="Cards"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/></svg></button>
       <button data-view="text" class="${textView ? "on" : ""}" aria-label="Text view" title="Text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg></button>
@@ -723,7 +740,7 @@ function renderHome() {
       </div>
       ${section("In progress", "", watching)}
       ${section("Haven't started", "Saved for later. Check off an episode and it moves up to In progress.", notStarted)}
-      ${section("Caught up", "", caught)}
+      ${caughtSection}
       ${otherMovies.length ? `<div class="section-label">Movies <span class="n">${otherMovies.filter(m => !m.watched).length || "all watched"}</span></div>${textView ? `<div class="rows">${otherMovies.map(movieRowHtml).join("")}</div>` : `<div class="list">${otherMovies.map(movieCardHtml).join("")}</div>`}` : ""}
     ` : `
       <div class="empty">
@@ -737,6 +754,7 @@ function renderHome() {
   bindListSwitcher();
   $("#addBtn2") && ($("#addBtn2").onclick = () => go("/add"));
   $("#menuBtn") && ($("#menuBtn").onclick = openMainMenu);
+  $("#hideEnded") && ($("#hideEnded").onchange = e => { settings().hideEnded = e.target.checked; saveDb(); renderHome(); });
   $("#selStart") && ($("#selStart").onclick = () => { sel.on = true; sel.items.clear(); renderHome(); });
   $("#selDone") && ($("#selDone").onclick = () => { sel.on = false; sel.items.clear(); renderHome(); });
   $("#selAll") && ($("#selAll").onclick = () => {
@@ -2194,7 +2212,7 @@ function listPayload(key) {
     shows[id] = keep;
   }
   const out = { shows, movies: L.movies || {}, favCategories: L.favCategories || null };
-  if (key === "me") { const st = settings(); out.v = 1; out.settings = { view: st.view, region: st.region, tmdbKey: st.tmdbKey }; }
+  if (key === "me") { const st = settings(); out.v = 1; out.settings = { view: st.view, region: st.region, tmdbKey: st.tmdbKey, hideEnded: st.hideEnded }; }
   else out.name = L.name || "Shared list";
   return JSON.parse(JSON.stringify(out)); // drops undefined values (Firestore rejects them)
 }
