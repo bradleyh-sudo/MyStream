@@ -335,6 +335,10 @@ body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
 .catedit{justify-content:flex-start;margin:-2px 0 10px}
 .pick-group{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin-top:4px}
 .field .sublabel{margin-top:10px}
+.sec-head{display:flex;align-items:center;gap:6px;width:100%;text-align:left;padding:4px 0;cursor:pointer}
+.sec-head .sec-chev{width:15px;height:15px;flex:none;transition:transform .15s}
+.sec-head.closed .sec-chev{transform:rotate(-90deg)}
+.sec-head.closed{opacity:.85}
 .count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;align-self:flex-start;padding-top:2px}
 .empty{text-align:center;color:var(--muted);padding:56px 16px}
 .empty h2{color:var(--text);font-size:20px;margin-bottom:6px}
@@ -778,18 +782,22 @@ function renderHome() {
   const caught = withStats.filter(x => x.st.everWatched && !x.st.next).sort(bySoonest);
   const notStarted = withStats.filter(x => !x.st.everWatched).sort(byName);
   const textView = settings().view === "text";
-  const section = (title, hint, list) => list.length
-    ? `<div class="section-label ${textView ? "with-cols" : ""}">${title} <span class="n">${list.length}</span>${textView ? `<span class="cols"><span>Left</span><span>New ep</span></span>` : ""}</div>${hint && !textView ? `<p class="hint">${hint}</p>` : ""}
-       ${textView ? `<div class="rows">${list.map(rowHtml).join("")}</div>` : `<div class="list">${list.map(cardHtml).join("")}</div>`}` : "";
+  // Collapsible groups; which ones are collapsed is a synced setting.
+  const collapsed = settings().collapsed || {};
+  const head = (key, title, count, cols) => `<button class="section-label sec-head ${cols && !collapsed[key] ? "with-cols" : ""} ${collapsed[key] ? "closed" : ""}" data-sec="${key}" aria-expanded="${!collapsed[key]}">
+      <svg class="sec-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>${title} <span class="n">${count}</span>${cols && !collapsed[key] ? `<span class="cols"><span>Left</span><span>New ep</span></span>` : ""}</button>`;
+  const section = (title, hint, list, key) => list.length
+    ? `${head(key, title, list.length, textView)}${collapsed[key] ? "" : `${hint && !textView ? `<p class="hint">${hint}</p>` : ""}
+       ${textView ? `<div class="rows">${list.map(rowHtml).join("")}</div>` : `<div class="list">${list.map(cardHtml).join("")}</div>`}`}` : "";
   // Caught up: optional "Hide ended" (shows that have finished airing for good)
   const hideEnded = !!settings().hideEnded;
   const endedCount = caught.filter(x => x.s.status === "Ended").length;
   const caughtShown = hideEnded ? caught.filter(x => x.s.status !== "Ended") : caught;
   const caughtSection = !caught.length ? "" : `
-    <div class="section-label ${textView && caughtShown.length ? "with-cols" : ""}">Caught up <span class="n">${caughtShown.length}</span>${textView && caughtShown.length ? `<span class="cols"><span>Left</span><span>New ep</span></span>` : ""}</div>
-    ${endedCount ? `<div class="sec-tools"><label class="tog"><input type="checkbox" id="hideEnded" ${hideEnded ? "checked" : ""}><span class="track"></span>Hide ended shows</label>
+    ${head("caught", "Caught up", caughtShown.length, textView && caughtShown.length)}
+    ${collapsed.caught ? "" : `${endedCount ? `<div class="sec-tools"><label class="tog"><input type="checkbox" id="hideEnded" ${hideEnded ? "checked" : ""}><span class="track"></span>Hide ended shows</label>
       ${hideEnded ? `<span class="sub">${endedCount} hidden</span>` : ""}</div>` : ""}
-    ${caughtShown.length ? (textView ? `<div class="rows">${caughtShown.map(rowHtml).join("")}</div>` : `<div class="list">${caughtShown.map(cardHtml).join("")}</div>`) : ""}`;
+    ${caughtShown.length ? (textView ? `<div class="rows">${caughtShown.map(rowHtml).join("")}</div>` : `<div class="list">${caughtShown.map(cardHtml).join("")}</div>`) : ""}`}`;
   const viewToggle = `<div class="seg mini" role="group" aria-label="View">
       <button data-view="cards" class="${textView ? "" : "on"}" aria-label="Cards view" title="Cards"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/></svg></button>
       <button data-view="text" class="${textView ? "on" : ""}" aria-label="Text view" title="Text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg></button>
@@ -811,10 +819,10 @@ function renderHome() {
         ${sel.on ? "" : `<button class="icon-btn selbtn" id="selStart" aria-label="Select" title="Select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="6" height="6" rx="1.5"/><path d="M4.5 7l1.2 1.2L8 5.8M12 7h9M3 16.5h6M12 16.5h9"/></svg></button>`}
         ${viewToggle}
       </div>
-      ${section("In progress", "", watching)}
-      ${section("Haven't started", "Saved for later. Check off an episode and it moves up to In progress.", notStarted)}
+      ${section("In progress", "", watching, "progress")}
+      ${section("Haven't started", "Saved for later. Check off an episode and it moves up to In progress.", notStarted, "notstarted")}
       ${caughtSection}
-      ${otherMovies.length ? `<div class="section-label">Movies <span class="n">${otherMovies.filter(m => !m.watched).length || "all watched"}</span></div>${textView ? `<div class="rows">${otherMovies.map(movieRowHtml).join("")}</div>` : `<div class="list">${otherMovies.map(movieCardHtml).join("")}</div>`}` : ""}
+      ${otherMovies.length ? `${head("movies", "Movies", otherMovies.filter(m => !m.watched).length || "all watched", false)}${collapsed.movies ? "" : textView ? `<div class="rows">${otherMovies.map(movieRowHtml).join("")}</div>` : `<div class="list">${otherMovies.map(movieCardHtml).join("")}</div>`}` : ""}
     ` : `
       <div class="empty">
         <h2>No shows yet</h2>
@@ -847,6 +855,11 @@ function renderHome() {
     $("#bannerGo").onclick = () => openAccountSheet("register");
     $("#bannerX").onclick = () => { settings().hideAcctBanner = true; saveDb(); renderHome(); };
   }
+  app.querySelectorAll("[data-sec]").forEach(b => b.onclick = () => {
+    const c = { ...(settings().collapsed || {}) }, k = b.dataset.sec;
+    c[k] ? delete c[k] : (c[k] = true);
+    settings().collapsed = c; saveDb(); renderHome();
+  });
   $("#wSvc") && ($("#wSvc").onchange = e => { filter = e.target.value; renderHome(); });
   $("#wGenre") && ($("#wGenre").onchange = e => { genreFilter = e.target.value; renderHome(); });
   app.querySelectorAll("[data-view]").forEach(b => b.onclick = () => { settings().view = b.dataset.view; saveDb(); renderHome(); });
@@ -2424,7 +2437,7 @@ function listPayload(key) {
     shows[id] = keep;
   }
   const out = { shows, movies: L.movies || {}, favCategories: L.favCategories || null };
-  if (key === "me") { const st = settings(); out.v = 1; out.settings = { view: st.view, region: st.region, tmdbKey: st.tmdbKey, hideEnded: st.hideEnded, mySubs: st.mySubs, myFree: st.myFree }; }
+  if (key === "me") { const st = settings(); out.v = 1; out.settings = { view: st.view, region: st.region, tmdbKey: st.tmdbKey, hideEnded: st.hideEnded, mySubs: st.mySubs, myFree: st.myFree, collapsed: st.collapsed }; }
   else out.name = L.name || "Shared list";
   return JSON.parse(JSON.stringify(out)); // drops undefined values (Firestore rejects them)
 }
@@ -2683,7 +2696,7 @@ function clearLocalAfterSignOut() {
   if (unwatchLists) { unwatchLists(); unwatchLists = null; }
   for (const k of Object.keys(pushTimers)) { clearTimeout(pushTimers[k]); delete pushTimers[k]; }
   const st = settings();
-  const keep = { view: st.view, exView: st.exView, region: st.region, hideAcctBanner: true };
+  const keep = { view: st.view, exView: st.exView, favView: st.favView, region: st.region, collapsed: st.collapsed, hideEnded: st.hideEnded, hideAcctBanner: true };
   db = wireDb({ lists: { me: {} }, settings: keep, deviceId: db.deviceId });
   filter = "All"; favFilter = "All";
   writeLocal();
