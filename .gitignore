@@ -1,3 +1,4 @@
 # test screenshots and other local files
 *.png
+!icons/*.png
 .DS_Store
