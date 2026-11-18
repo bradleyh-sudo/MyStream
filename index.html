@@ -161,10 +161,14 @@ a{color:var(--accent)}
 .check.sm svg{width:13px;height:13px}
 .row.seen .check{background:var(--good);border-color:var(--good);color:#fff}
 .row.seen .check svg{opacity:1}
-.section-label.with-cols{display:flex;align-items:baseline;gap:6px}
-.section-label .cols{margin-left:auto;display:flex;font-size:11px;padding-right:13px}
-.section-label .cols span:first-child{min-width:44px;text-align:right}
-.section-label .cols span:last-child{width:72px;text-align:right}
+.section-label.with-cols{display:flex;align-items:baseline;gap:2px 6px;flex-wrap:wrap}
+/* Column headings sit over the columns of the text rows below: same gap, widths, trailing buttons and right inset
+   (row padding + card border) as .row / rowHtml. On a narrow screen they drop to their own line, still lined up. */
+.section-label .cols{margin-left:auto;display:flex;gap:10px;font-size:11px;padding-right:13px}
+.section-label .cols .ch-new{width:62px;text-align:right}
+.section-label .cols .ch-btn{width:30px}
+.section-label .cols .ch-btn:last-child{margin-right:-6px}
+.section-label.cols-below .cols{flex-basis:100%;justify-content:flex-end}
 .star{flex:none;width:36px;height:36px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;color:var(--muted)}
 .star svg{width:22px;height:22px;fill:none;stroke:currentColor}
 .star.on{color:var(--accent)}
@@ -814,8 +818,10 @@ function renderHome() {
   const textView = settings().view === "text";
   // Collapsible groups; which ones are collapsed is a synced setting.
   const collapsed = settings().collapsed || {};
+  // Text-view column headings. The empty spans stand in for the buttons at the end of each row (rowHtml), so "Left" and "New ep" sit over their columns.
+  const colHeads = `<span class="cols"><span>Left</span><span class="ch-new">New ep</span>${multiList() ? `<span class="ch-btn"></span>` : ""}<span class="ch-btn"></span></span>`;
   const head = (key, title, count, cols) => `<button class="section-label sec-head ${cols && !collapsed[key] ? "with-cols" : ""} ${collapsed[key] ? "closed" : ""}" data-sec="${key}" aria-expanded="${!collapsed[key]}">
-      <svg class="sec-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>${title} <span class="n">${count}</span>${cols && !collapsed[key] ? `<span class="cols"><span>Left</span><span>New ep</span></span>` : ""}</button>`;
+      <svg class="sec-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>${title} <span class="n">${count}</span>${cols && !collapsed[key] ? colHeads : ""}</button>`;
   const section = (title, hint, list, key) => list.length
     ? `${head(key, title, list.length, textView)}${collapsed[key] ? "" : `${hint && !textView ? `<p class="hint">${hint}</p>` : ""}
        ${textView ? `<div class="rows">${list.map(rowHtml).join("")}</div>` : `<div class="list">${list.map(cardHtml).join("")}</div>`}`}` : "";
@@ -866,6 +872,9 @@ function renderHome() {
       </div>`}
   `;
   bindTopBar();
+  // If the column headings don't fit beside one section's title (narrow phone, long title), put them on their own line in every section so they match.
+  const colHeadSecs = [...app.querySelectorAll(".sec-head.with-cols")];
+  if (colHeadSecs.some(h => h.querySelector(".cols").offsetTop > h.querySelector(".n").offsetTop + 8)) colHeadSecs.forEach(h => h.classList.add("cols-below"));
   $("#addBtn2") && ($("#addBtn2").onclick = () => go("/add"));
   $("#hideEnded") && ($("#hideEnded").onchange = e => { settings().hideEnded = e.target.checked; saveDb(); renderHome(); });
   $("#selStart") && ($("#selStart").onclick = () => { sel.on = true; sel.items.clear(); renderHome(); });
