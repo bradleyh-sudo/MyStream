@@ -47,8 +47,8 @@ body{font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif
 .navgear{width:38px;height:38px;border-radius:999px;display:inline-flex;align-items:center;justify-content:center;color:var(--text);flex:none;margin-left:4px}
 .navgear svg{width:22px;height:22px}
 .pagetop{height:12px}
-.navmode{max-width:720px;margin:0 auto;padding:0 12px 8px}
-.navmode .seg{margin:0;padding:2px;border-radius:10px}
+.navmode{max-width:720px;margin:0 auto;padding:0 12px 8px;display:flex;gap:8px}
+.navmode .seg{flex:1;min-width:0;margin:0;padding:2px;border-radius:10px}
 .navmode .seg button{height:30px;font-size:14px}
 button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 input,select{font:inherit;color:inherit}
@@ -135,9 +135,6 @@ a{color:var(--accent)}
 .card.movie.seen .check svg{opacity:1}
 .card.movie.seen .name{color:var(--muted)}
 .toolbar{display:flex;align-items:flex-start;gap:6px}
-.seg.mini{flex:none;margin:0;padding:2px;border-radius:10px}
-.seg.mini button{width:38px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center}
-.seg.mini svg{width:18px;height:18px}
 .rows{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;box-shadow:var(--shadow)}
 .row{display:flex;align-items:center;gap:10px;width:100%;min-height:42px;padding:6px 12px;border-bottom:1px solid var(--line);text-align:left;font-size:15px;cursor:pointer}
 .row:last-child{border-bottom:0}
@@ -317,7 +314,6 @@ body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
 .exhead .seg{flex:1;margin:0;min-width:0}
 .exhead > .sub{flex:1;min-width:0}
 .exhead #sortSel-unused{flex:none;width:106px;height:40px;border-radius:10px;border:1px solid var(--line);background:var(--surface);padding:0 8px;font-size:15px;color:var(--text)}
-.exhead .seg.mini{flex:none}
 .tabtools{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin:-4px 0 10px}
 .favrows .row.compact{min-height:44px;padding:4px 8px 4px 12px;gap:8px}
 .favrow.compact .rn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -414,7 +410,9 @@ body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
     <button class="navgear" id="menuBtn" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
   </div>
   <div class="navmode"><div class="seg" id="modeSeg" role="group" aria-label="TV shows or movies">
-    <button data-mode="tv">TV shows</button><button data-mode="movie">Movies</button></div></div>
+    <button data-mode="tv">TV shows</button><button data-mode="movie">Movies</button></div>
+    <div class="seg" id="lookSeg" role="group" aria-label="Graphic or minimal view">
+    <button data-look="cards">Graphic</button><button data-look="text">Minimal</button></div></div>
 </nav>
 <div class="wrap" id="app"></div>
 
@@ -650,12 +648,6 @@ function openLineLists(kind, id) {
 function starBtn(on, label, extra = "") {
   return `<button class="star ${on ? "on" : ""} ${extra}" data-star aria-pressed="${on}" aria-label="${on ? "Remove " + esc(label) + " from Watching" : "Add " + esc(label) + " to Watching"}">${ICON.star}</button>`;
 }
-function viewToggleHtml(textView) {
-  return `<div class="seg mini" role="group" aria-label="View">
-      <button data-view="cards" class="${textView ? "" : "on"}" aria-label="Cards view" title="Cards"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/></svg></button>
-      <button data-view="text" class="${textView ? "on" : ""}" aria-label="Text view" title="Text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg></button>
-    </div>`;
-}
 function heartBtn(on, label, extra = "") {
   return `<button class="heart ${on ? "on" : ""} ${extra}" data-heart aria-pressed="${on}" aria-label="${on ? "Remove " + esc(label) + " from favorites" : "Add " + esc(label) + " to favorites"}">${ICON.heart}</button>`;
 }
@@ -690,6 +682,7 @@ function setFav(kind, id, on) {
 }
 function refresh() {
   if (listOverride) { refreshPending = true; return; }
+  drawModeSeg();   // keep the top-bar switches in step, e.g. after a change arrives from another device
   const h = location.hash.replace(/^#\/?/, "");
   if (h === "explore") drawExploreGrid();
   else if (h === "favorites") renderFavorites();
@@ -739,8 +732,11 @@ window.addEventListener("hashchange", render);
 let lastTab = "home";
 // TV shows or Movies: one switch in the top bar for every page (remembered and synced).
 const mode = () => settings().mode === "movie" ? "movie" : "tv";
+// Graphic (posters and cards) or Minimal (plain text lines): the other switch in the top bar, also for every page (remembered and synced).
+const look = () => settings().view === "text" ? "text" : "cards";
 function drawModeSeg() {
   $("#modeSeg").querySelectorAll("[data-mode]").forEach(b => b.classList.toggle("on", b.dataset.mode === mode()));
+  $("#lookSeg").querySelectorAll("[data-look]").forEach(b => { b.classList.toggle("on", b.dataset.look === look()); b.setAttribute("aria-pressed", b.dataset.look === look()); });
   const label = mode() === "movie" ? "Add movie" : "Add show";
   $("#addBtn").setAttribute("aria-label", label); $("#addBtn").title = label;
 }
@@ -751,6 +747,10 @@ $("#modeSeg").querySelectorAll("[data-mode]").forEach(b => b.onclick = () => {
   const h = location.hash.replace(/^#\/?/, "");
   if (h === "add") { const q = lastQuery; keepSearch = false; renderAdd(); if (q) { $("#q").value = q; syncSearchClear(); search(q); } }
   else render();
+});
+$("#lookSeg").querySelectorAll("[data-look]").forEach(b => b.onclick = () => {
+  if (b.dataset.look === look()) return;
+  settings().view = b.dataset.look; saveDb(); refresh();
 });
 $("#tabs").querySelectorAll(".navtab").forEach(b => b.onclick = () => go(b.dataset.tab === "home" ? "/" : "/" + b.dataset.tab));
 $("#addBtn").onclick = () => go("/add");
@@ -810,7 +810,7 @@ function renderHome() {
     .sort((a, b) => (b.s.lastWatchedAt || 0) - (a.s.lastWatchedAt || 0) || byName(a, b));
   const caught = withStats.filter(x => x.st.everWatched && !x.st.next).sort(bySoonest);
   const notStarted = withStats.filter(x => !x.st.everWatched).sort(byName);
-  const textView = settings().view === "text";
+  const textView = look() === "text";
   // Collapsible groups; which ones are collapsed is a synced setting.
   const collapsed = settings().collapsed || {};
   // Text-view column headings. The empty spans stand in for the buttons at the end of each row (rowHtml), so "Left" and "New ep" sit over their columns.
@@ -831,10 +831,6 @@ function renderHome() {
     ${collapsed.caught ? "" : `${endedCount ? `<div class="sec-tools"><label class="tog"><input type="checkbox" id="hideEnded" ${hideEnded ? "checked" : ""}><span class="track"></span>Hide ended shows</label>
       ${hideEnded ? `<span class="sub">${endedCount} hidden</span>` : ""}</div>` : ""}
     ${caughtShown.length ? (textView ? `<div class="rows">${caughtShown.map(rowHtml).join("")}</div>` : `<div class="list">${caughtShown.map(cardHtml).join("")}</div>`) : ""}`}`;
-  const viewToggle = `<div class="seg mini" role="group" aria-label="View">
-      <button data-view="cards" class="${textView ? "" : "on"}" aria-label="Cards view" title="Cards"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/></svg></button>
-      <button data-view="text" class="${textView ? "on" : ""}" aria-label="Text view" title="Text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg></button>
-    </div>`;
 
   app.innerHTML = `
     ${sel.on ? `<header class="bar">
@@ -850,7 +846,6 @@ function renderHome() {
         <select id="wSvc" aria-label="Service"><option value="All">Services</option>${services.map(v => `<option value="${esc(v)}" ${v === filter ? "selected" : ""}>${esc(v)}</option>`).join("")}</select>
         <select id="wGenre" aria-label="Genre"><option value="">Genres</option>${allGenres.map(v => `<option value="${esc(v)}" ${v === genreFilter ? "selected" : ""}>${esc(v)}</option>`).join("")}</select>
         ${sel.on ? "" : `<button class="icon-btn selbtn" id="selStart" aria-label="Select" title="Select"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="6" height="6" rx="1.5"/><path d="M4.5 7l1.2 1.2L8 5.8M12 7h9M3 16.5h6M12 16.5h9"/></svg></button>`}
-        ${viewToggle}
       </div>
       ${mode() === "tv" ? `
         ${section("In progress", "", watching, "progress")}
@@ -900,7 +895,6 @@ function renderHome() {
   });
   $("#wSvc") && ($("#wSvc").onchange = e => { filter = e.target.value; renderHome(); });
   $("#wGenre") && ($("#wGenre").onchange = e => { genreFilter = e.target.value; renderHome(); });
-  app.querySelectorAll("[data-view]").forEach(b => b.onclick = () => { settings().view = b.dataset.view; saveDb(); renderHome(); });
   const toggleSel = key => { sel.items.has(key) ? sel.items.delete(key) : sel.items.add(key); renderHome(); };
   app.querySelectorAll("[data-show]").forEach(c => c.onclick = e => {
     if (sel.on) return toggleSel("show:" + c.dataset.show);
@@ -1539,11 +1533,10 @@ function renderFavorites() {
         ${none && cats.length ? `<option value="None" ${favFilter === "None" ? "selected" : ""}>No category (${none})</option>` : ""}
         <option value="${NEW_CAT}">+ New category…</option>
       </select>
-      <button class="btn ghost small" id="favPick">${ICON.dice.replace("<svg", '<svg width="16" height="16"')} Pick one for me</button>
-      ${viewToggleHtml(settings().favView === "text")}</div>` : ""}
+      <button class="btn ghost small" id="favPick">${ICON.dice.replace("<svg", '<svg width="16" height="16"')} Pick one for me</button></div>` : ""}
     ${favs.length ? `
       ${cats.includes(favFilter) ? `<div class="tabtools catedit"><button class="btn ghost small" id="editCat">${shown.length ? "Add or remove favorites" : `Add favorites to ${esc(favFilter)}`}</button></div>` : ""}
-      ${shown.length ? `<div class="rows favrows ${settings().favView === "text" ? "notext-art" : ""}">${shown.map(favRowHtml).join("")}</div>`
+      ${shown.length ? `<div class="rows favrows ${look() === "text" ? "notext-art" : ""}">${shown.map(favRowHtml).join("")}</div>`
         : `<p class="empty">Nothing in ${esc(favFilter === "None" ? "No category" : favFilter)} yet.</p>`}
     ` : `
       <div class="empty">
@@ -1552,7 +1545,6 @@ function renderFavorites() {
       </div>`}
   `;
   bindTopBar();
-  app.querySelectorAll(".toolbar [data-view]").forEach(b => b.onclick = () => { settings().favView = b.dataset.view; saveDb(); renderFavorites(); });
   $("#favPick") && ($("#favPick").onclick = () => pickFavorite(favFilter === "None" ? "All" : favFilter));
   // Category dropdown; its last entry makes a new category (the dropdown itself stays on the current one).
   $("#favCat") && ($("#favCat").onchange = e => {
@@ -1576,7 +1568,7 @@ function favRowHtml(f) {
     const ns = new Set(reg.map(e => e.s)).size;
     sub = reg.length ? `${ns} season${ns === 1 ? "" : "s"} · ${reg.length} eps` : "TV show";
   } else sub = [it.year, "Movie"].filter(Boolean).join(" · ");
-  if (settings().favView === "text") return `<div class="row favrow compact" data-kind="${f.kind}" data-id="${f.id}" role="button" tabindex="0">
+  if (look() === "text") return `<div class="row favrow compact" data-kind="${f.kind}" data-id="${f.id}" role="button" tabindex="0">
     ${serviceIcon(it.service, 18)}
     <span class="rn">${esc(f.name)}</span>
     <span class="fcats">${cats.map(c => `<span class="catpill">${esc(c)}</span>`).join("")}<button class="catbtn" data-cats aria-label="Categories for ${esc(f.name)}">${cats.length ? "Edit" : "+ Cat"}</button></span>
@@ -1928,8 +1920,7 @@ function openExploreSettings() {
 async function drawExploreControls() {
   const body = $("#exBody");
   body.innerHTML = `
-    <div class="exhead"><span class="sub">${mode() === "movie" ? "Movies" : "TV shows"} on your services</span>
-      ${viewToggleHtml(settings().exView === "text")}</div>
+    <div class="exhead"><span class="sub">${mode() === "movie" ? "Movies" : "TV shows"} on your services</span></div>
     <div class="provrow">
       <select id="provSel" aria-label="Service"><option value="All">Services</option></select>
       <select id="genreSel" aria-label="Genre"><option value="">Genres</option></select>
@@ -1942,11 +1933,6 @@ async function drawExploreControls() {
     g.innerHTML = `<option value="">Genres</option>` + list.map(x => `<option value="${esc(x.name)}" ${x.name === ex.genre ? "selected" : ""}>${esc(x.name)}</option>`).join("");
   }).catch(() => {});
 
-  body.querySelectorAll("[data-view]").forEach(b => b.onclick = () => {
-    settings().exView = b.dataset.view; saveDb();
-    body.querySelectorAll("[data-view]").forEach(x => x.classList.toggle("on", x === b));
-    drawExploreGrid();
-  });
   $("#sortSel").onchange = e => { ex.sort = e.target.value; loadExplore(true); };
 
   try {
@@ -2052,7 +2038,7 @@ function drawExploreGrid() {
     return;
   }
   const type = ex.type;
-  const textView = settings().exView === "text";
+  const textView = look() === "text";
   const listHtml = textView ? `<div class="rows exrows">${ex.items.slice(0, ex.shown).map((it, i) => {
     const title = it.title || it.name, date = it.release_date || it.first_air_date || "";
     return `<div class="row" data-i="${i}" role="button" tabindex="0">
@@ -2750,7 +2736,7 @@ function clearLocalAfterSignOut() {
   if (unwatchLists) { unwatchLists(); unwatchLists = null; }
   for (const k of Object.keys(pushTimers)) { clearTimeout(pushTimers[k]); delete pushTimers[k]; }
   const st = settings();
-  const keep = { view: st.view, exView: st.exView, favView: st.favView, region: st.region, collapsed: st.collapsed, hideEnded: st.hideEnded, mode: st.mode, hideAcctBanner: true };
+  const keep = { view: st.view, region: st.region, collapsed: st.collapsed, hideEnded: st.hideEnded, mode: st.mode, hideAcctBanner: true };
   db = wireDb({ lists: { me: {} }, settings: keep, deviceId: db.deviceId });
   filter = "All"; favFilter = "All";
   writeLocal();
