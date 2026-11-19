@@ -2158,16 +2158,19 @@ async function drawExploreControls() {
   } catch {}
 }
 const EXPLORE_BATCH = 50;
-const exHidden = () => new Set((settings().exHidden || []).map(Number));
-const hideSeen = () => settings().exHideSeen !== false;   // default on
-const seenMovie = it => !!(((db.movies || {})[it.id] || {}).watched);
+// Explore leaves out anything hidden, watched or on your Watching list -- except favorites, which always show.
+const hiddenKey = () => ex.type === "movie" ? "exHidden" : "exHiddenTv";
+const exHidden = () => new Set((settings()[hiddenKey()] || []).map(Number));
+function exEntry(it) { const e = libraryEntry(ex.type, it); return e ? storeOf(e.kind)[e.id] : null; }
 function exSkip(it) {
-  if (ex.type !== "movie") return false;
-  if (!ex.showDone && exHidden().has(it.id)) return true;
-  return hideSeen() && seenMovie(it);
+  if (ex.showDone) return false;
+  const x = exEntry(it);
+  if (x && x.fav) return false;              // favorites stay
+  if (exHidden().has(it.id)) return true;   // hidden with the eye button
+  return !!x;                               // on your list or watched
 }
 const exVisible = () => ex.items.map((it, i) => ({ it, i })).filter(x => !exSkip(x.it));
-const exDoneCount = () => ex.type !== "movie" ? 0 : ex.items.filter(it => exHidden().has(it.id)).length;
+const exDoneCount = () => { const was = ex.showDone; ex.showDone = false; const n = ex.items.filter(exSkip).length; ex.showDone = was; return n; };
 async function loadExplore(reset) {
   if (reset) { ex.page = 0; ex.pages = Infinity; ex.items = []; ex.shown = EXPLORE_BATCH; ex.error = null; }
   const seq = ++ex.seq;
@@ -2259,10 +2262,8 @@ function drawExploreGrid() {
   const shownList = exVisible().slice(0, ex.shown);
   const moreLeft = exVisible().length > ex.shown || ex.page < ex.pages;
   const doneN = exDoneCount();
-  const doneNote = doneN ? `<p class="hint exdone">${ex.showDone ? `Showing ${doneN} hidden.` : `${doneN} hidden.`} <a href="#" id="exShowDone">${ex.showDone ? "Hide them again" : "Show them"}</a></p>` : "";
-  const seenN = type === "movie" ? ex.items.filter(seenMovie).length : 0;
-  const seenToggle = type === "movie" ? `<div class="sec-tools exseen"><label class="tog"><input type="checkbox" id="hideSeen" ${hideSeen() ? "checked" : ""}><span class="track"></span>Hide movies I've seen</label>
-      ${hideSeen() && seenN ? `<span class="sub">${seenN} hidden</span>` : ""}</div>` : "";
+  const doneNote = doneN ? `<p class="hint exdone">${doneN} on your list, watched or hidden${ex.showDone ? " (showing)" : ""}. <a href="#" id="exShowDone">${ex.showDone ? "Hide them again" : "Show them"}</a></p>` : "";
+  const seenToggle = "";
   const listHtml = textView ? `<div class="rows exrows">${shownList.map(({ it, i }) => {
     const title = it.title || it.name, date = it.release_date || it.first_air_date || "";
     return `<div class="row" data-i="${i}" role="button" tabindex="0">
@@ -2275,16 +2276,17 @@ function drawExploreGrid() {
   }).join("")}</div>` : "";
   const footer = `
   ${ex.loading ? `<div class="spinner"></div>` : moreLeft && ex.items.length ? `<button class="btn ghost more" id="exMore">Show ${EXPLORE_BATCH} more</button>` : ""}
-  ${!ex.loading && !shownList.length ? `<p class="empty">${ex.items.length ? "You've hidden or watched everything loaded so far." : "Nothing found for that filter."}</p>` : ""}
+  ${!ex.loading && !shownList.length ? `<p class="empty">${ex.items.length ? "Everything loaded so far is on your list, watched or hidden." : "Nothing found for that filter."}</p>` : ""}
   ${doneNote}`;
   const EYE_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 5.1A10.5 10.5 0 0 1 12 5c6 0 10 7 10 7a17.6 17.6 0 0 1-3.2 3.9M6.6 6.6C3.9 8.4 2 12 2 12s4 7 10 7c1.7 0 3.2-.5 4.5-1.2M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
   grid.innerHTML = textView ? seenToggle + listHtml + footer : seenToggle + `<div class="grid">${shownList.map(({ it, i }) => {
     const title = it.title || it.name, date = it.release_date || it.first_air_date || "";
-    const mv = type === "movie" ? (db.movies || {})[it.id] : null, isHidden = type === "movie" && exHidden().has(it.id);
-    return `<div class="tile ${isHidden || (mv && mv.watched) ? "done" : ""}" data-i="${i}" role="button" tabindex="0" aria-label="${esc(title)}">
+    const x = exEntry(it), isHidden = exHidden().has(it.id);
+    const seen = !!x && (type === "movie" ? !!x.watched : regularEps(x).filter(aired).length > 0 && regularEps(x).filter(aired).every(e => (x.watched || {})[e.id]));
+    return `<div class="tile ${ex.showDone && (isHidden || (x && !x.fav)) ? "done" : ""}" data-i="${i}" role="button" tabindex="0" aria-label="${esc(title)}">
       <div class="art">${it.poster_path ? `<img src="${IMG}w342${esc(it.poster_path)}" alt="" loading="lazy">` : `<span>${esc(title.charAt(0))}</span>`}
-        ${type === "movie" ? `<button class="tbtn hidebtn ${isHidden ? "on" : ""}" data-hide aria-label="${isHidden ? "Unhide" : "Hide"} ${esc(title)}" title="${isHidden ? "Unhide" : "Hide from Explore"}">${EYE_OFF}</button>
-          <button class="tbtn seenbtn ${mv && mv.watched ? "on" : ""}" data-seen aria-label="${mv && mv.watched ? "Mark not watched" : "Mark watched"}: ${esc(title)}" title="${mv && mv.watched ? "Watched" : "Mark watched"}">${ICON.check}</button>` : ""}
+        <button class="tbtn hidebtn ${isHidden ? "on" : ""}" data-hide aria-label="${isHidden ? "Unhide" : "Hide"} ${esc(title)}" title="${isHidden ? "Unhide" : "Hide from Explore"}">${EYE_OFF}</button>
+        <button class="tbtn seenbtn ${seen ? "on" : ""}" data-seen aria-label="${seen ? "Watched" : "Mark watched"}: ${esc(title)}" title="${seen ? "Watched" : "Mark watched"}">${ICON.check}</button>
         ${starBtn(inLibrary(type, it), title, starring.has(type + "-" + it.id) ? "busy" : "")}
         ${heartBtn(isFavTmdb(type, it), title, hearting.has(type + "-" + it.id) ? "busy" : "")}</div>
       <div class="tt">${ex.sort === "popular" ? `<span class="rk">${i + 1}.</span> ` : ""}${esc(title)}</div><div class="ty">${esc(date.slice(0, 4))}${it.vote_average ? ` · ★ ${it.vote_average.toFixed(1)}` : ""}</div>
@@ -2293,22 +2295,32 @@ function drawExploreGrid() {
   grid.querySelectorAll("[data-i]").forEach(b => b.onclick = e => {
     const it = ex.items[b.dataset.i];
     if (e.target.closest("[data-hide]")) return toggleHideMovie(it);
-    if (e.target.closest("[data-seen]")) return quickWatchedMovie(it);
+    if (e.target.closest("[data-seen]")) return type === "movie" ? quickWatchedMovie(it) : quickWatchedShow(it);
     if (e.target.closest("[data-star]")) return toggleStar(type, it);
     if (e.target.closest("[data-heart]")) return toggleHeartTmdb(type, it);
     openExploreItem(type, it.id);
   });
   const more = $("#exMore");
   if (more) more.onclick = () => { ex.shown += EXPLORE_BATCH; loadExplore(false); };
-  const hs = $("#hideSeen"); if (hs) hs.onchange = () => { settings().exHideSeen = hs.checked; saveDb(); loadExplore(false); };
   const sd = $("#exShowDone"); if (sd) sd.onclick = e => { e.preventDefault(); ex.showDone = !ex.showDone; loadExplore(false); };
 }
 // Movie tiles: hide from Explore / quick "watched". Both drop the movie out of the grid (Undo) and top it back up.
 function toggleHideMovie(it) {
-  const set = exHidden(), title = it.title || it.name;
-  if (set.has(it.id)) { set.delete(it.id); settings().exHidden = [...set]; saveDb(); return loadExplore(false); }
-  set.add(it.id); settings().exHidden = [...set]; saveDb(); loadExplore(false);
-  toast(`Hid ${title} from Explore.`, "Undo", () => { const s2 = exHidden(); s2.delete(it.id); settings().exHidden = [...s2]; saveDb(); loadExplore(false); });
+  const set = exHidden(), title = it.title || it.name, k = hiddenKey();
+  if (set.has(it.id)) { set.delete(it.id); settings()[k] = [...set]; saveDb(); return loadExplore(false); }
+  set.add(it.id); settings()[k] = [...set]; saveDb(); loadExplore(false);
+  toast(`Hid ${title} from Explore.`, "Undo", () => { const s2 = new Set((settings()[k] || []).map(Number)); s2.delete(it.id); settings()[k] = [...s2]; saveDb(); loadExplore(false); });
+}
+// TV tiles: ✓ = add the show with every aired episode checked (Undo via markShowWatched).
+async function quickWatchedShow(it) {
+  const key = "tv-" + it.id;
+  if (starring.has(key)) return;
+  const e = libraryEntry("tv", it);
+  if (e) { markShowWatched(e.id); return loadExplore(false); }
+  starring.add(key); drawExploreGrid();
+  try { const added = await addFromTmdb("tv", it.id, undefined, { listed: true }); markShowWatched(added.id, true); }
+  catch (err) { toast(err && err.message === "notfound" ? `Couldn't find episode info for ${it.name}.` : `Couldn't add ${it.name}. Check your connection.`); }
+  starring.delete(key); loadExplore(false);
 }
 async function quickWatchedMovie(it) {
   const key = "movie-" + it.id, title = it.title || it.name;
@@ -2767,7 +2779,7 @@ function listPayload(key) {
     shows[id] = keep;
   }
   const out = { shows, movies: L.movies || {}, favCategories: L.favCategories || null };
-  if (key === "me") { const st = settings(); out.v = 1; out.settings = { view: st.view, region: st.region, tmdbKey: st.tmdbKey, hideEnded: st.hideEnded, mySubs: st.mySubs, myFree: st.myFree, collapsed: st.collapsed, mode: st.mode, exHidden: st.exHidden, exHideSeen: st.exHideSeen }; }
+  if (key === "me") { const st = settings(); out.v = 1; out.settings = { view: st.view, region: st.region, tmdbKey: st.tmdbKey, hideEnded: st.hideEnded, mySubs: st.mySubs, myFree: st.myFree, collapsed: st.collapsed, mode: st.mode, exHidden: st.exHidden, exHiddenTv: st.exHiddenTv }; }
   else out.name = L.name || "Shared list";
   return JSON.parse(JSON.stringify(out)); // drops undefined values (Firestore rejects them)
 }
@@ -3050,7 +3062,7 @@ async function startAccounts() {
 /* ---------- app version + "new version ready" ---------- */
 // Bump APP_VERSION with every release. Phones (especially home-screen apps) can keep an old copy for a while;
 // this checks the live page and offers a reload when a newer version is published.
-const APP_VERSION = "2026.11.19-2";
+const APP_VERSION = "2026.11.19-3";
 let updateOffered = false;
 async function checkForUpdate() {
   if (updateOffered || location.protocol === "file:") return;
