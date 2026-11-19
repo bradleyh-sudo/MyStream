@@ -2294,13 +2294,14 @@ async function drawExploreControls() {
   } catch {}
 }
 const EXPLORE_BATCH = 50;
-// Explore leaves out anything hidden, watched or on your Watching list -- except favorites, which always show.
+// Explore leaves out anything hidden, watched or on your Watching list. Favorites still show -- unless it's a movie you've watched.
 const hiddenKey = () => ex.type === "movie" ? "exHidden" : "exHiddenTv";
 const exHidden = () => new Set((settings()[hiddenKey()] || []).map(Number));
 function exEntry(it) { const e = libraryEntry(ex.type, it); return e ? storeOf(e.kind)[e.id] : null; }
 function exSkip(it) {
   if (ex.showDone) return false;
   const x = exEntry(it);
+  if (x && ex.type === "movie" && x.watched) return true;   // a watched movie never shows, favorite or not
   if (x && x.fav) return false;              // favorites stay
   if (exHidden().has(it.id)) return true;   // hidden with the eye button
   return !!x;                               // on your list or watched
@@ -3203,7 +3204,7 @@ async function startAccounts() {
 /* ---------- app version + "new version ready" ---------- */
 // Bump APP_VERSION with every release. Phones (especially home-screen apps) can keep an old copy for a while;
 // this checks the live page and offers a reload when a newer version is published.
-const APP_VERSION = "2026.11.19-6";
+const APP_VERSION = "2026.11.19-7";
 let updateOffered = false;
 async function checkForUpdate() {
   if (updateOffered || location.protocol === "file:") return;
