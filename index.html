@@ -405,6 +405,7 @@ body.landing-on{overflow:hidden}
 .tu-nav{display:flex;justify-content:space-between;gap:10px}
 .tu-nav .btn{flex:1;height:46px}
 .tu-nav span{flex:1}
+.exkey{margin:-4px 0 12px}
 .count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;align-self:flex-start;padding-top:2px}
 .empty{text-align:center;color:var(--muted);padding:56px 16px}
 .empty h2{color:var(--text);font-size:20px;margin-bottom:6px}
@@ -758,7 +759,7 @@ function refresh() {
   if (listOverride) { refreshPending = true; return; }
   drawModeSeg();   // keep the top-bar switches in step, e.g. after a change arrives from another device
   const h = location.hash.replace(/^#\/?/, "");
-  if (h === "explore") drawExploreGrid();
+  if (h === "explore") { if ($("#exGrid")) drawExploreGrid(); else renderExplore(); }
   else if (h === "favorites") renderFavorites();
   else if (h === "add") { if (lastResults) drawResults(lastResults); }
   else if (!h || h === "/") renderHome();
@@ -1241,6 +1242,8 @@ function openMainMenu() {
     <p>TV shows and movies each have their own list.</p>
     <button class="btn ghost" data-a="cats">Edit categories</button>
     <h3 style="margin-top:8px">Explore</h3>
+    ${account.user ? `<label class="tog"><input type="checkbox" id="shareStats" ${shareStats() ? "checked" : ""}><span class="track"></span>Include my list in Popular on MyStream</label>
+      <p class="sub">Anonymous: only titles count, never your name, email or what episode you're on.</p>` : ""}
     <button class="btn ghost" data-a="exset">Explore settings (TMDB key, country)</button>
     <h3 style="margin-top:8px">Backup</h3>
     <p>${u ? "Your list is saved to your account. You can also export a backup file." : "Without an account, your shows are saved in this browser only. Export a backup file to keep them safe or move them to another device."}</p>
@@ -1260,6 +1263,7 @@ function openMainMenu() {
     on("exset", () => { close(); openExploreSettings(); });
     on("cats", () => { close(); openCategoryManager(); });
     on("tour", () => { close(); openTutorial(); });
+    const ss = m.querySelector("#shareStats"); if (ss) ss.onchange = () => { settings().shareStats = ss.checked; saveDb(); pushStats(); toast(ss.checked ? "Your list counts toward Popular on MyStream." : "Your list is no longer included."); };
   });
 }
 function exportBackup() {
@@ -2243,7 +2247,8 @@ function renderExplore() {
     <p class="credit">Show and movie info from TMDB; streaming availability from JustWatch. This app uses the TMDB API but is not endorsed or certified by TMDB.</p>
   `;
   bindTopBar();
-  if (!tmdbKey()) return drawExploreSetup();
+  if (!tmdbKey() && !account.user) return drawExploreSetup();
+  if (!tmdbKey()) ex.sort = "ms";   // no TMDB key: what's popular on MyStream still works
   drawExploreControls();
   if (!ex.items.length && !ex.loading) loadExplore(true); else drawExploreGrid();
 }
@@ -2303,17 +2308,20 @@ async function drawExploreControls() {
     <div class="provrow">
       <select id="provSel" aria-label="Service"><option value="All">Services</option></select>
       <select id="genreSel" aria-label="Genre"><option value="">Genres</option></select>
-      <select id="sortSel" aria-label="Sort">${[["popular", "Popular"], ["top", "Top rated"], ["new", "Newest"]].map(([v, l]) => `<option value="${v}" ${ex.sort === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+      <select id="sortSel" aria-label="Sort">${[["ms", "On MyStream"], ...(tmdbKey() ? [["popular", "Popular"], ["top", "Top rated"], ["new", "Newest"]] : [])].map(([v, l]) => `<option value="${v}" ${ex.sort === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+    ${tmdbKey() ? "" : `<p class="hint exkey">Showing what's popular on MyStream. For Popular, Top rated and Newest on every service, add a free TMDB key in <a href="#" id="exAddKey">Settings → Explore settings</a>.</p>`}
     <div id="exGrid"></div>`;
   $("#genreSel").onchange = e => { ex.genre = e.target.value; loadExplore(true); };
-  genres(ex.type).then(list => {
-    const g = $("#genreSel"); if (!g) return;
+  if (ex.sort !== "ms") genres(ex.type).then(list => {
+    const g = $("#genreSel"); if (!g || ex.sort === "ms") return;
     const groups = [...new Set(list.map(x => genreGroup(x.name)))].sort(byGenreOrder);
     if (ex.genre && !groups.includes(ex.genre)) ex.genre = "";
     g.innerHTML = `<option value="">Genres</option>` + groups.map(n => `<option value="${esc(n)}" ${n === ex.genre ? "selected" : ""}>${esc(n)}</option>`).join("");
   }).catch(() => {});
 
-  $("#sortSel").onchange = e => { ex.sort = e.target.value; loadExplore(true); };
+  $("#sortSel").onchange = e => { ex.sort = e.target.value; ex.prov = "All"; ex.genre = ""; drawExploreControls(); loadExplore(true); };
+  $("#exAddKey") && ($("#exAddKey").onclick = e => { e.preventDefault(); openExploreSettings(); });
+  if (ex.sort === "ms") { $("#genreSel").onchange = e => { ex.genre = e.target.value; loadExplore(true); }; return fillMsDropdowns(); }
 
   try {
     const provs = await providers(ex.type);
@@ -2348,6 +2356,7 @@ function exSkip(it) {
 const exVisible = () => ex.items.map((it, i) => ({ it, i })).filter(x => !exSkip(x.it));
 const exDoneCount = () => { const was = ex.showDone; ex.showDone = false; const n = ex.items.filter(exSkip).length; ex.showDone = was; return n; };
 async function loadExplore(reset) {
+  if (ex.sort === "ms") { if (reset) { ex.shown = EXPLORE_BATCH; ex.showDone = false; } return loadMs(); }
   if (reset) { ex.page = 0; ex.pages = Infinity; ex.items = []; ex.shown = EXPLORE_BATCH; ex.error = null; }
   const seq = ++ex.seq;
   if (exVisible().length >= ex.shown || ex.page >= ex.pages) { ex.loading = false; return drawExploreGrid(); }
@@ -2385,6 +2394,7 @@ async function loadExplore(reset) {
 }
 // The library entry for a TMDB item (shows added by search are matched by name + year).
 function libraryEntry(type, item) {
+  if (item.ms && type === "tv") return db.shows[item.id] ? { kind: "show", id: item.id } : null;   // MyStream items use TVMaze ids
   if (type === "movie") return (db.movies || {})[item.id] ? { kind: "movie", id: item.id } : null;
   const shows = Object.values(db.shows);
   const name = (item.name || "").toLowerCase(), yr = (item.first_air_date || "").slice(0, 4);
@@ -2403,6 +2413,7 @@ function pickServiceFrom(d) {
 // Add a TMDB show/movie to the list. Returns { kind, id, title }.
 // opts: { listed, fav } (default: put on Watching)
 async function addFromTmdb(type, id, d, opts = { listed: true }, listKey) {
+  if (!d && !tmdbKey()) { const it = ex.items.find(x => x.id === Number(id) && x.ms); if (it) d = msDetails(it); }
   d = d || await tmdbDetails(type, id);
   const title = d.title || d.name, year = (d.release_date || d.first_air_date || "").slice(0, 4);
   if (type === "movie") return withList(listKey, () => {
@@ -2430,7 +2441,13 @@ function drawExploreGrid() {
   const grid = $("#exGrid");
   if (!grid) return;
   if (ex.error && !ex.items.length) {
-    grid.innerHTML = `<div class="err">${ex.error.message === "badkey" ? "<b>TMDB didn't accept your key.</b><p>Fix it with the gear button above.</p>" : netProblem(ex.error)}</div>`;
+    grid.innerHTML = ex.error.message === "ms-signin" ? `<div class="setup"><p><b>Sign in to see what's popular on MyStream.</b></p><button class="btn" id="msSignIn">Sign in</button></div>`
+      : `<div class="err">${ex.error.message === "badkey" ? "<b>TMDB didn't accept your key.</b><p>Fix it with the gear button above.</p>" : netProblem(ex.error)}</div>`;
+    $("#msSignIn") && ($("#msSignIn").onclick = () => openAccountSheet("signin"));
+    return;
+  }
+  if (ex.sort === "ms" && !ex.loading && !ex.items.length) {
+    grid.innerHTML = `<p class="empty">${ex.prov !== "All" || ex.genre ? "Nothing on MyStream matches that filter yet." : `No one else has added any ${ex.type === "movie" ? "movies" : "shows"} yet. As more people use MyStream, this fills up.`}</p>`;
     return;
   }
   const type = ex.type;
@@ -2455,26 +2472,34 @@ function drawExploreGrid() {
   ${!ex.loading && !shownList.length ? `<p class="empty">${ex.items.length ? "Everything loaded so far is on your list, watched or hidden." : "Nothing found for that filter."}</p>` : ""}
   ${doneNote}`;
   const EYE_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 5.1A10.5 10.5 0 0 1 12 5c6 0 10 7 10 7a17.6 17.6 0 0 1-3.2 3.9M6.6 6.6C3.9 8.4 2 12 2 12s4 7 10 7c1.7 0 3.2-.5 4.5-1.2M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
-  grid.innerHTML = textView ? seenToggle + listHtml + footer : seenToggle + `<div class="grid">${shownList.map(({ it, i }) => {
+  grid.innerHTML = textView ? seenToggle + listHtml + footer : seenToggle + `<div class="grid">${shownList.map(({ it, i }, j) => {
+    const rankNo = it.ms ? j + 1 : i + 1;
     const title = it.title || it.name, date = it.release_date || it.first_air_date || "";
     const x = exEntry(it), isHidden = exHidden().has(it.id);
     const seen = !!x && (type === "movie" ? !!x.watched : regularEps(x).filter(aired).length > 0 && regularEps(x).filter(aired).every(e => (x.watched || {})[e.id]));
     return `<div class="tile ${ex.showDone && (isHidden || (x && !x.fav)) ? "done" : ""}" data-i="${i}" role="button" tabindex="0" aria-label="${esc(title)}">
-      <div class="art">${it.poster_path ? `<img src="${IMG}w342${esc(it.poster_path)}" alt="" loading="lazy">` : `<span>${esc(title.charAt(0))}</span>`}
+      <div class="art">${it.poster_path ? `<img src="${IMG}w342${esc(it.poster_path)}" alt="" loading="lazy">` : it.posterUrl ? `<img src="${esc(it.posterUrl)}" alt="" loading="lazy">` : `<span>${esc(title.charAt(0))}</span>`}
         <button class="tbtn hidebtn ${isHidden ? "on" : ""}" data-hide aria-label="${isHidden ? "Unhide" : "Hide"} ${esc(title)}" title="${isHidden ? "Unhide" : "Hide from Explore"}">${EYE_OFF}</button>
         <button class="tbtn seenbtn ${seen ? "on" : ""}" data-seen aria-label="${seen ? "Watched" : "Mark watched"}: ${esc(title)}" title="${seen ? "Watched" : "Mark watched"}">${ICON.check}</button>
         ${starBtn(inLibrary(type, it), title, starring.has(type + "-" + it.id) ? "busy" : "")}
         ${heartBtn(isFavTmdb(type, it), title, hearting.has(type + "-" + it.id) ? "busy" : "")}</div>
-      <div class="tt">${ex.sort === "popular" ? `<span class="rk">${i + 1}.</span> ` : ""}${esc(title)}</div><div class="ty">${esc(date.slice(0, 4))}${it.vote_average ? ` · ★ ${it.vote_average.toFixed(1)}` : ""}</div>
+      <div class="tt">${ex.sort === "popular" || ex.sort === "ms" ? `<span class="rk">${rankNo}.</span> ` : ""}${esc(title)}</div><div class="ty">${it.ms ? `${it.msCount} ${it.msCount === 1 ? "person" : "people"}${it.svc ? " · " + esc(it.svc) : ""}` : `${esc(date.slice(0, 4))}${it.vote_average ? ` · ★ ${it.vote_average.toFixed(1)}` : ""}`}</div>
     </div>`;
   }).join("")}</div>${footer}`;
   grid.querySelectorAll("[data-i]").forEach(b => b.onclick = e => {
     const it = ex.items[b.dataset.i];
+    if (it.ms && type === "tv") {
+      if (e.target.closest("[data-hide]")) return toggleHideMovie(it);
+      if (e.target.closest("[data-seen]")) return addTvMaze(it.id, { listed: true }).then(() => { markShowWatched(it.id, true); loadExplore(false); }).catch(() => toast("Couldn't add that show. Check your connection."));
+      if (e.target.closest("[data-star]")) return toggleShowInList(it.id);
+      if (e.target.closest("[data-heart]")) return toggleShowFav(it.id);
+      return go("/show/" + it.id);
+    }
     if (e.target.closest("[data-hide]")) return toggleHideMovie(it);
     if (e.target.closest("[data-seen]")) return type === "movie" ? quickWatchedMovie(it) : quickWatchedShow(it);
     if (e.target.closest("[data-star]")) return toggleStar(type, it);
     if (e.target.closest("[data-heart]")) return toggleHeartTmdb(type, it);
-    openExploreItem(type, it.id);
+    openExploreItem(type, it.id, it.ms ? msDetails(it) : null);
   });
   const more = $("#exMore");
   if (more) more.onclick = () => { ex.shown += EXPLORE_BATCH; loadExplore(false); };
@@ -2517,17 +2542,18 @@ async function quickWatchedMovie(it) {
   } catch (e) { toast(`Couldn't mark ${title}. Check your connection.`); }
   starring.delete(key); loadExplore(false);
 }
-async function openExploreItem(type, id) {
+async function openExploreItem(type, id, fallback) {
   let content;
   sheet(`<div class="content"><div class="spinner"></div></div>`, m => { content = m.querySelector(".content"); }, "Close");
   const closeSheet = () => content.closest(".menu")?.remove();
   const stored = type === "movie" ? (db.movies || {})[id] : null;
   let d;
   try {
+    if (!tmdbKey() && fallback) throw new Error("nokey");
     d = await tmdbDetails(type, id);
   } catch (e) {
-    if (!stored) { content.innerHTML = `<div class="err">${tmdbKey() ? netProblem(e) : "<b>Explore isn't set up.</b>"}</div>`; return; }
-    d = { title: stored.title, release_date: stored.year, overview: "", poster_path: null };
+    if (fallback) d = fallback; else if (!stored) { content.innerHTML = `<div class="err">${tmdbKey() ? netProblem(e) : "<b>Explore isn't set up.</b>"}</div>`; return; }
+    else d = { title: stored.title, release_date: stored.year, overview: "", poster_path: null };
   }
   const title = d.title || d.name;
   const year = (d.release_date || d.first_air_date || "").slice(0, 4);
@@ -2942,7 +2968,11 @@ async function loadBackend() {
     saveList: (id, data) => F.setDoc(listRef(id), data, { mergeFields: Object.keys(data) }),
     joinList: (id, uid, name) => F.updateDoc(listRef(id), { members: F.arrayUnion(uid), ["memberNames." + uid]: name }),
     leaveList: (id, uid) => F.updateDoc(listRef(id), { members: F.arrayRemove(uid), ["memberNames." + uid]: F.deleteField() }),
-    deleteList: id => F.deleteDoc(listRef(id))
+    deleteList: id => F.deleteDoc(listRef(id)),
+    // Popular on MyStream: one anonymous summary per person (titles only), readable by signed-in users
+    saveStats: (uid, data) => F.setDoc(F.doc(fs, "stats", uid), data),
+    deleteStats: uid => F.deleteDoc(F.doc(fs, "stats", uid)),
+    loadStats: async () => (await F.getDocs(F.collection(fs, "stats"))).docs.map(d => ({ id: d.id, data: d.data() }))
   };
 }
 function deviceId() {
@@ -2958,7 +2988,7 @@ function listPayload(key) {
     shows[id] = keep;
   }
   const out = { shows, movies: L.movies || {}, favCategories: L.favCategories || null, favCategoriesMovie: L.favCategoriesMovie || null };
-  if (key === "me") { const st = settings(); out.v = 1; out.settings = { view: st.view, region: st.region, tmdbKey: st.tmdbKey, hideEnded: st.hideEnded, mySubs: st.mySubs, myFree: st.myFree, collapsed: st.collapsed, mode: st.mode, exHidden: st.exHidden, exHiddenTv: st.exHiddenTv }; }
+  if (key === "me") { const st = settings(); out.v = 1; out.settings = { view: st.view, region: st.region, tmdbKey: st.tmdbKey, hideEnded: st.hideEnded, mySubs: st.mySubs, myFree: st.myFree, collapsed: st.collapsed, mode: st.mode, exHidden: st.exHidden, exHiddenTv: st.exHiddenTv, shareStats: st.shareStats }; }
   else out.name = L.name || "Shared list";
   return JSON.parse(JSON.stringify(out)); // drops undefined values (Firestore rejects them)
 }
@@ -3035,7 +3065,7 @@ async function pushNow(key = "me") {
   if (!account.user || !db.lists[key]) return;
   account.syncing = true; updateSyncLine();
   try {
-    if (key === "me") await backend.save(account.user.uid, cloudData());
+    if (key === "me") { await backend.save(account.user.uid, cloudData()); pushStats(); }
     else await backend.saveList(key, { ...listPayload(key), updatedAt: Date.now() });
     if (db.lists[key]) markSynced(key);
     account.lastSync = Date.now(); account.error = "";
@@ -3248,7 +3278,7 @@ async function startAccounts() {
 /* ---------- app version + "new version ready" ---------- */
 // Bump APP_VERSION with every release. Phones (especially home-screen apps) can keep an old copy for a while;
 // this checks the live page and offers a reload when a newer version is published.
-const APP_VERSION = "2026.11.19-9";
+const APP_VERSION = "2026.11.19-11";
 let updateOffered = false;
 async function checkForUpdate() {
   if (updateOffered || location.protocol === "file:") return;
@@ -3271,6 +3301,80 @@ function showUpdateBar() {
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForUpdate(); });
 setTimeout(checkForUpdate, 3000);
+
+/* ---------- Popular on MyStream (anonymous) ---------- */
+// What's on your own list (Watching or Favorites), as titles only: no names, emails or episode details.
+const shareStats = () => settings().shareStats !== false;
+function statsPayload() {
+  const L = db.lists.me, shows = {}, movies = {};
+  for (const sh of Object.values(L.shows || {})) {
+    if (!(isListed(sh) || sh.fav)) continue;
+    const eps = regularEps(sh).filter(aired);
+    shows[sh.id] = { n: sh.name || "", i: sh.image || "", y: sh.year || "", s: sh.service || "", g: groupsOf(sh),
+                     f: sh.fav ? 1 : 0, w: eps.length && eps.every(e => (sh.watched || {})[e.id]) ? 1 : 0 };
+  }
+  for (const m of Object.values(L.movies || {})) {
+    if (!(isListed(m) || m.fav)) continue;
+    movies[m.id] = { n: m.title || "", p: m.poster || "", y: m.year || "", s: m.service || "", g: groupsOf(m), f: m.fav ? 1 : 0, w: m.watched ? 1 : 0 };
+  }
+  return JSON.parse(JSON.stringify({ shows, movies }));
+}
+let statsTimer = null;
+function pushStats() {
+  clearTimeout(statsTimer);
+  statsTimer = setTimeout(async () => {
+    if (!account.user || !backend || !backend.saveStats) return;
+    try {
+      if (!shareStats()) { if (db.statsSig) { await backend.deleteStats(account.user.uid); db.statsSig = ""; writeLocal(); } return; }
+      const data = statsPayload(), sig = JSON.stringify(data);
+      if (sig === db.statsSig) return;
+      await backend.saveStats(account.user.uid, { ...data, updatedAt: Date.now() });
+      db.statsSig = sig; writeLocal();
+    } catch {}
+  }, 1500);
+}
+// Explore's "On MyStream" source: everyone else's summaries, counted.
+let msCache = null;
+async function loadMs() {
+  const seq = ++ex.seq;
+  ex.loading = true; drawExploreGrid();
+  try {
+    if (!account.user || !backend || !backend.loadStats) throw new Error("ms-signin");
+    if (!msCache || Date.now() - msCache.at > 5 * 60 * 1000) msCache = { at: Date.now(), docs: await backend.loadStats() };
+    if (seq !== ex.seq) return;
+    const field = ex.type === "movie" ? "movies" : "shows", agg = new Map();
+    for (const { id: uid, data } of msCache.docs) {
+      if (uid === account.user.uid) continue;   // what other people have, not you
+      for (const [id, x] of Object.entries((data && data[field]) || {})) {
+        const a = agg.get(id) || { id: Number(id), ms: true, msCount: 0, name: x.n, title: x.n, year: x.y, svcs: {}, groups: new Set(), posterUrl: x.i || x.p || "" };
+        a.msCount++; if (x.s) a.svcs[x.s] = (a.svcs[x.s] || 0) + 1; (x.g || []).forEach(g => a.groups.add(g));
+        if (!a.posterUrl && (x.i || x.p)) a.posterUrl = x.i || x.p;
+        agg.set(id, a);
+      }
+    }
+    let all = [...agg.values()].map(a => ({ ...a, svc: Object.entries(a.svcs).sort((p, q) => q[1] - p[1])[0]?.[0] || "", groups: [...a.groups],
+      release_date: a.year ? a.year + "-01-01" : "", first_air_date: a.year ? a.year + "-01-01" : "",
+      poster_path: /image\.tmdb\.org/.test(a.posterUrl) ? a.posterUrl.replace(/^.*\/t\/p\/w\d+/, "") : null }));
+    ex.msSvcs = [...new Set(all.map(a => a.svc).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    ex.msGenres = [...new Set(all.flatMap(a => a.groups))].sort(byGenreOrder);
+    if (ex.prov !== "All") all = all.filter(a => a.svc === ex.prov);
+    if (ex.genre) all = all.filter(a => a.groups.includes(ex.genre));
+    ex.items = all.sort((a, b) => b.msCount - a.msCount || (a.name || "").localeCompare(b.name || ""));
+    ex.page = ex.pages = 1; ex.error = null;
+  } catch (e) { if (seq !== ex.seq) return; ex.items = []; ex.error = e; }
+  ex.loading = false;
+  fillMsDropdowns(); drawExploreGrid();
+}
+function fillMsDropdowns() {
+  if (ex.sort !== "ms") return;
+  const ps = $("#provSel"), gs = $("#genreSel");
+  if (ps) { ps.innerHTML = `<option value="All">Services</option>` + (ex.msSvcs || []).map(v => `<option value="${esc(v)}" ${v === ex.prov ? "selected" : ""}>${esc(v)}</option>`).join("");
+            ps.onchange = () => { ex.prov = ps.value; loadExplore(true); }; }
+  if (gs) gs.innerHTML = `<option value="">Genres</option>` + (ex.msGenres || []).map(v => `<option value="${esc(v)}" ${v === ex.genre ? "selected" : ""}>${esc(v)}</option>`).join("");
+}
+// Movie details for a MyStream item when there's no TMDB key: what we know from the summaries.
+const msDetails = it => ({ id: it.id, title: it.title, name: it.name, release_date: it.release_date, poster_path: it.poster_path, overview: "", genres: [],
+  "watch/providers": { results: it.svc ? { [region()]: { flatrate: [{ provider_id: 0, provider_name: it.svc }] } } : {} } });
 
 /* ---------- welcome page (first visit) + tutorial ---------- */
 const ICONSVG = `<svg viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lgg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd27a"/><stop offset="1" stop-color="#f0a92e"/></linearGradient></defs>
