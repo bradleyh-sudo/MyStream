@@ -108,6 +108,15 @@ header.bar h1{font-size:26px;font-weight:750;letter-spacing:-.02em;flex:1;min-wi
 .tile{text-align:left;min-width:0}
 .tile .art{position:relative;aspect-ratio:2/3;border-radius:10px;overflow:hidden;background:var(--surface2);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:28px;font-weight:700}
 .tile .art img{width:100%;height:100%;object-fit:cover;display:block}
+.tile .tbtn{position:absolute;left:5px;width:34px;height:34px;border-radius:999px;background:rgba(0,0,0,.55);color:#fff;display:flex;align-items:center;justify-content:center}
+.tile .tbtn svg{width:19px;height:19px}
+.tile .hidebtn{top:5px}
+.tile .hidebtn.on{background:#fff;color:#1a1a1a}
+.tile .seenbtn{bottom:5px}
+.tile .seenbtn.on{background:var(--good)}
+.tile.done .art img,.tile.done .art > span{opacity:.45}
+.tt .rk{color:var(--muted);font-weight:700}
+.exdone{text-align:center;margin-top:10px}
 .tile .rank{position:absolute;left:6px;top:6px;min-width:24px;height:24px;padding:0 6px;border-radius:999px;background:rgba(0,0,0,.72);color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center}
 .tile .have-old{position:absolute;right:6px;top:6px;width:24px;height:24px;border-radius:999px;background:var(--good);color:#fff;font-size:14px;font-weight:800;display:flex;align-items:center;justify-content:center}
 .tile .tt{font-size:14px;font-weight:600;margin-top:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -2142,12 +2151,22 @@ async function drawExploreControls() {
   } catch {}
 }
 const EXPLORE_BATCH = 50;
+const exHidden = () => new Set((settings().exHidden || []).map(Number));
+function exSkip(it) {
+  if (ex.type !== "movie" || ex.showDone) return false;
+  if (exHidden().has(it.id)) return true;
+  const m = (db.movies || {})[it.id];
+  return !!(m && m.watched);
+}
+const exVisible = () => ex.items.map((it, i) => ({ it, i })).filter(x => !exSkip(x.it));
+const exDoneCount = () => ex.type !== "movie" ? 0 : ex.items.filter(it => exHidden().has(it.id) || ((db.movies || {})[it.id] || {}).watched).length;
 async function loadExplore(reset) {
   if (reset) { ex.page = 0; ex.pages = Infinity; ex.items = []; ex.shown = EXPLORE_BATCH; ex.error = null; }
   const seq = ++ex.seq;
-  if (ex.items.length >= ex.shown || ex.page >= ex.pages) { ex.loading = false; return drawExploreGrid(); }
+  if (exVisible().length >= ex.shown || ex.page >= ex.pages) { ex.loading = false; return drawExploreGrid(); }
   ex.loading = true; drawExploreGrid();
   try {
+   for (let round = 0; round < 3 && exVisible().length < ex.shown && ex.page < ex.pages; round++) {
     const provs = await providers(ex.type);
     const vis = visibleProviders(provs);
     const ids = ex.prov === "All" ? vis.flatMap(p => p.ids) : (vis.find(p => p.label === ex.prov) || { ids: [] }).ids;
@@ -2158,7 +2177,7 @@ async function loadExplore(reset) {
     if (ex.sort === "popular") params.sort_by = "popularity.desc";
     if (ex.sort === "top") { params.sort_by = "vote_average.desc"; params["vote_count.gte"] = ex.type === "tv" ? 200 : 500; }
     if (ex.sort === "new") { params.sort_by = dateField + ".desc"; params[dateField + ".lte"] = today(); params["vote_count.gte"] = 10; }
-    const need = Math.ceil((ex.shown - ex.items.length) / 20);
+    const need = Math.ceil((ex.shown - exVisible().length) / 20);
     const pageNums = []; for (let n = ex.page + 1; n <= Math.min(ex.page + need, ex.pages); n++) pageNums.push(n);
     const results = await Promise.all(pageNums.map(n => tmdb(`/discover/${ex.type}`, { ...params, page: n })));
     if (seq !== ex.seq) return;
@@ -2169,6 +2188,7 @@ async function loadExplore(reset) {
     }
     ex.page = pageNums.length ? pageNums[pageNums.length - 1] : ex.page;
     ex.error = null;
+   }
   } catch (e) {
     if (seq !== ex.seq) return;
     ex.error = e;
@@ -2228,7 +2248,11 @@ function drawExploreGrid() {
   }
   const type = ex.type;
   const textView = look() === "text";
-  const listHtml = textView ? `<div class="rows exrows">${ex.items.slice(0, ex.shown).map((it, i) => {
+  const shownList = exVisible().slice(0, ex.shown);
+  const moreLeft = exVisible().length > ex.shown || ex.page < ex.pages;
+  const doneN = exDoneCount();
+  const doneNote = doneN ? `<p class="hint exdone">${ex.showDone ? `Showing ${doneN} hidden or watched.` : `${doneN} hidden or watched.`} <a href="#" id="exShowDone">${ex.showDone ? "Hide them again" : "Show them"}</a></p>` : "";
+  const listHtml = textView ? `<div class="rows exrows">${shownList.map(({ it, i }) => {
     const title = it.title || it.name, date = it.release_date || it.first_air_date || "";
     return `<div class="row" data-i="${i}" role="button" tabindex="0">
       ${ex.sort === "popular" ? `<span class="xr">${i + 1}</span>` : ""}
@@ -2238,28 +2262,60 @@ function drawExploreGrid() {
       ${starBtn(inLibrary(type, it), title, "sm " + (starring.has(type + "-" + it.id) ? "busy" : ""))}
     </div>`;
   }).join("")}</div>` : "";
-  grid.innerHTML = textView ? listHtml + `
-  ${ex.loading ? `<div class="spinner"></div>` : (ex.items.length > ex.shown || ex.page < ex.pages) && ex.items.length ? `<button class="btn ghost more" id="exMore">Show ${EXPLORE_BATCH} more</button>` : ""}
-  ${!ex.loading && !ex.items.length ? `<p class="empty">Nothing found for that filter.</p>` : ""}` : `<div class="grid">${ex.items.slice(0, ex.shown).map((it, i) => {
+  const footer = `
+  ${ex.loading ? `<div class="spinner"></div>` : moreLeft && ex.items.length ? `<button class="btn ghost more" id="exMore">Show ${EXPLORE_BATCH} more</button>` : ""}
+  ${!ex.loading && !shownList.length ? `<p class="empty">${ex.items.length ? "You've hidden or watched everything loaded so far." : "Nothing found for that filter."}</p>` : ""}
+  ${doneNote}`;
+  const EYE_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 5.1A10.5 10.5 0 0 1 12 5c6 0 10 7 10 7a17.6 17.6 0 0 1-3.2 3.9M6.6 6.6C3.9 8.4 2 12 2 12s4 7 10 7c1.7 0 3.2-.5 4.5-1.2M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+  grid.innerHTML = textView ? listHtml + footer : `<div class="grid">${shownList.map(({ it, i }) => {
     const title = it.title || it.name, date = it.release_date || it.first_air_date || "";
-    return `<div class="tile" data-i="${i}" role="button" tabindex="0" aria-label="${esc(title)}">
+    const mv = type === "movie" ? (db.movies || {})[it.id] : null, isHidden = type === "movie" && exHidden().has(it.id);
+    return `<div class="tile ${isHidden || (mv && mv.watched) ? "done" : ""}" data-i="${i}" role="button" tabindex="0" aria-label="${esc(title)}">
       <div class="art">${it.poster_path ? `<img src="${IMG}w342${esc(it.poster_path)}" alt="" loading="lazy">` : `<span>${esc(title.charAt(0))}</span>`}
-        ${ex.sort === "popular" ? `<span class="rank">${i + 1}</span>` : ""}
+        ${type === "movie" ? `<button class="tbtn hidebtn ${isHidden ? "on" : ""}" data-hide aria-label="${isHidden ? "Unhide" : "Hide"} ${esc(title)}" title="${isHidden ? "Unhide" : "Hide from Explore"}">${EYE_OFF}</button>
+          <button class="tbtn seenbtn ${mv && mv.watched ? "on" : ""}" data-seen aria-label="${mv && mv.watched ? "Mark not watched" : "Mark watched"}: ${esc(title)}" title="${mv && mv.watched ? "Watched" : "Mark watched"}">${ICON.check}</button>` : ""}
         ${starBtn(inLibrary(type, it), title, starring.has(type + "-" + it.id) ? "busy" : "")}
         ${heartBtn(isFavTmdb(type, it), title, hearting.has(type + "-" + it.id) ? "busy" : "")}</div>
-      <div class="tt">${esc(title)}</div><div class="ty">${esc(date.slice(0, 4))}${it.vote_average ? ` · ★ ${it.vote_average.toFixed(1)}` : ""}</div>
+      <div class="tt">${ex.sort === "popular" ? `<span class="rk">${i + 1}.</span> ` : ""}${esc(title)}</div><div class="ty">${esc(date.slice(0, 4))}${it.vote_average ? ` · ★ ${it.vote_average.toFixed(1)}` : ""}</div>
     </div>`;
-  }).join("")}</div>
-  ${ex.loading ? `<div class="spinner"></div>` : (ex.items.length > ex.shown || ex.page < ex.pages) && ex.items.length ? `<button class="btn ghost more" id="exMore">Show ${EXPLORE_BATCH} more</button>` : ""}
-  ${!ex.loading && !ex.items.length ? `<p class="empty">Nothing found for that filter.</p>` : ""}`;
+  }).join("")}</div>${footer}`;
   grid.querySelectorAll("[data-i]").forEach(b => b.onclick = e => {
     const it = ex.items[b.dataset.i];
+    if (e.target.closest("[data-hide]")) return toggleHideMovie(it);
+    if (e.target.closest("[data-seen]")) return quickWatchedMovie(it);
     if (e.target.closest("[data-star]")) return toggleStar(type, it);
     if (e.target.closest("[data-heart]")) return toggleHeartTmdb(type, it);
     openExploreItem(type, it.id);
   });
   const more = $("#exMore");
   if (more) more.onclick = () => { ex.shown += EXPLORE_BATCH; loadExplore(false); };
+  const sd = $("#exShowDone"); if (sd) sd.onclick = e => { e.preventDefault(); ex.showDone = !ex.showDone; loadExplore(false); };
+}
+// Movie tiles: hide from Explore / quick "watched". Both drop the movie out of the grid (Undo) and top it back up.
+function toggleHideMovie(it) {
+  const set = exHidden(), title = it.title || it.name;
+  if (set.has(it.id)) { set.delete(it.id); settings().exHidden = [...set]; saveDb(); return loadExplore(false); }
+  set.add(it.id); settings().exHidden = [...set]; saveDb(); loadExplore(false);
+  toast(`Hid ${title} from Explore.`, "Undo", () => { const s2 = exHidden(); s2.delete(it.id); settings().exHidden = [...s2]; saveDb(); loadExplore(false); });
+}
+async function quickWatchedMovie(it) {
+  const key = "movie-" + it.id, title = it.title || it.name;
+  if (starring.has(key)) return;
+  const cur = (db.movies || {})[it.id];
+  if (cur && cur.watched) { cur.watched = false; saveDb(); return loadExplore(false); }
+  starring.add(key); drawExploreGrid();
+  try {
+    const wasNew = !cur;
+    if (wasNew) await addFromTmdb("movie", it.id, undefined, { listed: true });
+    const m = db.movies[it.id];
+    const before = { listed: m.listed };
+    m.watched = true; m.listed = true; saveDb();
+    toast(`Marked ${title} as watched.`, "Undo", () => {
+      if (wasNew) delete db.movies[it.id]; else { db.movies[it.id].watched = false; db.movies[it.id].listed = before.listed; }
+      saveDb(); loadExplore(false);
+    });
+  } catch (e) { toast(`Couldn't mark ${title}. Check your connection.`); }
+  starring.delete(key); loadExplore(false);
 }
 async function openExploreItem(type, id) {
   let content;
@@ -2699,7 +2755,7 @@ function listPayload(key) {
     shows[id] = keep;
   }
   const out = { shows, movies: L.movies || {}, favCategories: L.favCategories || null };
-  if (key === "me") { const st = settings(); out.v = 1; out.settings = { view: st.view, region: st.region, tmdbKey: st.tmdbKey, hideEnded: st.hideEnded, mySubs: st.mySubs, myFree: st.myFree, collapsed: st.collapsed, mode: st.mode }; }
+  if (key === "me") { const st = settings(); out.v = 1; out.settings = { view: st.view, region: st.region, tmdbKey: st.tmdbKey, hideEnded: st.hideEnded, mySubs: st.mySubs, myFree: st.myFree, collapsed: st.collapsed, mode: st.mode, exHidden: st.exHidden }; }
   else out.name = L.name || "Shared list";
   return JSON.parse(JSON.stringify(out)); // drops undefined values (Firestore rejects them)
 }
