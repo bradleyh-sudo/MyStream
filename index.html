@@ -1991,7 +1991,7 @@ function watchLinksHtml(title, service) {
   const PLAY = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>';
   return `<div class="watchrow">
     ${service ? `<a class="btn watchbtn" href="${esc(watchUrl(title, service))}" target="_blank" rel="noopener">${PLAY} Watch on ${esc(service)}</a>` : ""}
-    <a class="linkish morewatch" href="${esc(justWatchUrl(title))}" target="_blank" rel="noopener">${service ? "More ways to watch" : "Where to watch"} ↗</a></div>`;
+    ${service ? "" : `<a class="linkish morewatch" href="${esc(justWatchUrl(title))}" target="_blank" rel="noopener">Where to watch ↗</a>`}</div>`;
 }
 
 /* ---------- show profile (preview for shows not in your list) ---------- */
@@ -2151,21 +2151,25 @@ function saveServiceChoices(root) {
   settings().mySubs = PAID_SERVICES.filter(n => ticked.has(n));
   settings().myFree = FREE_SERVICES.filter(n => ticked.has(n));
 }
-function openServicesPicker(after) {
-  const paid = new Set(mySubs() || []), free = new Set(myFree());
+let pickerOpen = false;
+function openServicesPicker(after, opts = {}) {
+  if (pickerOpen) return;
+  pickerOpen = true;
+  const paid = new Set(opts.paid || mySubs() || []), free = new Set(opts.free || myFree());
   const row = (n, on) => `<label class="catopt">${serviceIcon(n, 26)}<span>${esc(n)}</span><input type="checkbox" data-svc value="${esc(n)}" ${on ? "checked" : ""}></label>`;
   sheet(`
-    <h3>My streaming services</h3>
-    <p>Explore shows only the services you tick.</p>
+    <h3>${opts.signup ? "Last step: your streaming services" : "My streaming services"}</h3>
+    <p>${opts.signup ? "Tick the ones you use. Explore shows only these, and you can change them any time in Settings." : "Explore shows only the services you tick."}</p>
     <div class="pick-group">Subscriptions you pay for</div>
     <div class="catlist">${PAID_SERVICES.map(n => row(n, paid.has(n))).join("")}</div>
     <div class="pick-group">Free services (ads or library card)</div>
     <div class="catlist">${FREE_SERVICES.map(n => row(n, free.has(n))).join("")}</div>
-    <button class="btn" data-a="save">Save</button>
+    <button class="btn" data-a="save">${opts.signup ? "Finish" : "Save"}</button>
   `, (m, close) => {
+    new MutationObserver((_, obs) => { if (!m.isConnected) { pickerOpen = false; obs.disconnect(); } }).observe($("#overlay"), { childList: true });
     m.querySelector('[data-a="save"]').onclick = () => {
       saveServiceChoices(m);
-      saveDb(); close(); toast("Saved your services.");
+      saveDb(); close(); pickerOpen = false; toast(opts.signup ? "You're all set." : "Saved your services.");
       if (location.hash === "#/explore") { drawExploreControls(); loadExplore(true); } else refresh();
       if (after) after();
     };
@@ -3141,9 +3145,12 @@ function openAccountSheet(mode) {
       err.hidden = true;
       try {
         if (!backend || !backend.signInGoogle) throw { code: "auth/network-request-failed" };
-        if (reg) saveRegSubs();
+        const ticked = reg ? [...m.querySelectorAll(".subpick input:checked")].map(i => i.value) : null;
         await backend.signInGoogle();
-        close(); toast("Signed in.");
+        close();
+        if (reg) openServicesPicker(null, { signup: true, paid: ticked.filter(n => PAID_SERVICES.includes(n)).concat(mySubs() || []),
+                                            free: ticked.some(n => FREE_SERVICES.includes(n)) ? ticked.filter(n => FREE_SERVICES.includes(n)) : myFree() });
+        else toast("Signed in.");
       } catch (e) {
         if (e && (e.code === "auth/popup-closed-by-user" || e.code === "auth/cancelled-popup-request")) return;
         showErr(e && e.code === "auth/popup-blocked"
@@ -3204,7 +3211,7 @@ async function startAccounts() {
 /* ---------- app version + "new version ready" ---------- */
 // Bump APP_VERSION with every release. Phones (especially home-screen apps) can keep an old copy for a while;
 // this checks the live page and offers a reload when a newer version is published.
-const APP_VERSION = "2026.11.19-7";
+const APP_VERSION = "2026.11.19-8";
 let updateOffered = false;
 async function checkForUpdate() {
   if (updateOffered || location.protocol === "file:") return;
