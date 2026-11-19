@@ -365,6 +365,10 @@ body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
 .frank.top3{background:#d9a06b;color:#2e1a08}
 .rankquick{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .sheet .rankquick .btn{width:100%;height:40px}
+.watchrow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:2px 0 14px}
+.watchbtn{gap:8px;text-decoration:none}
+.morewatch{text-decoration:none;font-size:14px;padding:0}
+.content .watchrow{margin:0}
 .count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;align-self:flex-start;padding-top:2px}
 .empty{text-align:center;color:var(--muted);padding:56px 16px}
 .empty h2{color:var(--text);font-size:20px;margin-bottom:6px}
@@ -1900,6 +1904,29 @@ function openCategorySheet(kind, id) {
   }, "Done");
 }
 
+/* ---------- watch links ---------- */
+// Services don't publish stable links to individual titles, so: the service's own search where we know it,
+// otherwise a Google "watch X on Y" search (its where-to-watch box links straight to the title), plus JustWatch for all options.
+const SERVICE_SEARCH = {
+  "Netflix": q => `https://www.netflix.com/search?q=${q}`,
+  "Prime Video": q => `https://www.amazon.com/s?k=${q}&i=instant-video`,
+  "Apple TV+": q => `https://tv.apple.com/search?term=${q}`,
+  "YouTube": q => `https://www.youtube.com/results?search_query=${q}`,
+  "Tubi": q => `https://tubitv.com/search/${q}`
+};
+function watchUrl(title, service) {
+  const q = encodeURIComponent(title);
+  if (SERVICE_SEARCH[service]) return SERVICE_SEARCH[service](q);
+  return `https://www.google.com/search?q=${encodeURIComponent(`watch "${title}" on ${service}`)}`;
+}
+const justWatchUrl = title => `https://www.justwatch.com/${region().toLowerCase()}/search?q=${encodeURIComponent(title)}`;
+function watchLinksHtml(title, service) {
+  const PLAY = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>';
+  return `<div class="watchrow">
+    ${service ? `<a class="btn watchbtn" href="${esc(watchUrl(title, service))}" target="_blank" rel="noopener">${PLAY} Watch on ${esc(service)}</a>` : ""}
+    <a class="linkish morewatch" href="${esc(justWatchUrl(title))}" target="_blank" rel="noopener">${service ? "More ways to watch" : "Where to watch"} ↗</a></div>`;
+}
+
 /* ---------- show profile (preview for shows not in your list) ---------- */
 const previewCache = {};
 function profileInfoHtml(sh) {
@@ -1943,6 +1970,7 @@ async function renderPreview(id) {
       </div>
     </div>
     ${info.summary}
+    ${watchLinksHtml(sh.name, sh.defaultService)}
     <div class="profile-actions">
       <button class="btn" id="pvAdd">${ICON.star.replace("<svg", '<svg width="18" height="18" class="fillsvg"')} Add to Watching</button>
       <button class="btn ghost" id="pvWatched">${ICON.check.replace("<svg", '<svg width="18" height="18"')} Mark as watched</button>
@@ -2411,6 +2439,7 @@ async function openExploreItem(type, id) {
         ${(d.genres || []).length ? `<div class="sub">${d.genres.slice(0, 3).map(g => esc(g.name)).join(", ")}</div>` : ""}</div>
     </div>
     ${flat.length ? `<div class="where"><span class="sub">Streaming on</span>${flat.slice(0, 5).map(p => `<span class="pv">${p.logo_path ? `<img onerror="this.remove()" src="${IMG}w92${esc(p.logo_path)}" alt="">` : ""}${esc(friendlyProvider(p.provider_name))}</span>`).join("")}</div>` : ""}
+    ${watchLinksHtml(title, (type === "movie" && movie && movie.service) || (show && show.service) || (flat[0] ? friendlyProvider(flat[0].provider_name) : ""))}
     ${d.overview ? `<p class="overview">${esc(d.overview)}</p>` : ""}
     <div id="itemErr"></div>
     ${type === "tv"
@@ -2566,6 +2595,7 @@ function renderShow(id) {
         </div>
       </div>
     </div>
+    <div id="watchRow">${watchLinksHtml(show.name, show.service)}</div>
     ${profileInfoHtml(show).summary}
     ${isListed(show) ? `<div class="seg" id="breakSeg" role="group" aria-label="Watching or taking a break">
       <button data-break="0">Watching</button><button data-break="1">Take a break</button></div>` : ""}
@@ -2605,6 +2635,7 @@ function renderShow(id) {
     v = v.trim();
     if (v !== (show.service || "")) { show.service = v; saveDb(); }
     $("#svcIco").innerHTML = serviceIcon(v, 40);
+    $("#watchRow").innerHTML = watchLinksHtml(show.name, v);
     svc.innerHTML = serviceOptions(show);
     $("#svcOtherRow").hidden = true;
   };
@@ -3103,7 +3134,7 @@ async function startAccounts() {
 /* ---------- app version + "new version ready" ---------- */
 // Bump APP_VERSION with every release. Phones (especially home-screen apps) can keep an old copy for a while;
 // this checks the live page and offers a reload when a newer version is published.
-const APP_VERSION = "2026.11.19-4";
+const APP_VERSION = "2026.11.19-5";
 let updateOffered = false;
 async function checkForUpdate() {
   if (updateOffered || location.protocol === "file:") return;
