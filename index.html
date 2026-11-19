@@ -352,6 +352,11 @@ body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
 .sec-head .sec-chev{width:15px;height:15px;flex:none;transition:transform .15s}
 .sec-head.closed .sec-chev{transform:rotate(-90deg)}
 .sec-head.closed{opacity:.85}
+.appver{text-align:center;font-size:12px;color:var(--muted);margin-top:6px}
+.updatebar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 16px);z-index:30;width:calc(100% - 32px);max-width:480px;
+  display:flex;align-items:center;gap:12px;background:var(--accent);color:var(--accent-ink);border-radius:14px;padding:10px 10px 10px 16px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.updatebar span{flex:1}
+.updatebar .btn{background:var(--accent-ink);color:var(--accent)}
 .count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;align-self:flex-start;padding-top:2px}
 .empty{text-align:center;color:var(--muted);padding:56px 16px}
 .empty h2{color:var(--text);font-size:20px;margin-bottom:6px}
@@ -1188,6 +1193,7 @@ function openMainMenu() {
     <p>${u ? "Your list is saved to your account. You can also export a backup file." : "Without an account, your shows are saved in this browser only. Export a backup file to keep them safe or move them to another device."}</p>
     <button class="btn ghost" data-a="export">Export backup</button>
     <button class="btn ghost" data-a="import">Import backup</button>
+    <p class="appver">MyStream version ${APP_VERSION}</p>
   `, (m, close) => {
     const on = (a, f) => { const b = m.querySelector(`[data-a="${a}"]`); if (b) b.onclick = f; };
     m.querySelector('[data-close]').textContent = "Close";
@@ -3040,6 +3046,33 @@ async function startAccounts() {
     }
   });
 }
+
+/* ---------- app version + "new version ready" ---------- */
+// Bump APP_VERSION with every release. Phones (especially home-screen apps) can keep an old copy for a while;
+// this checks the live page and offers a reload when a newer version is published.
+const APP_VERSION = "2026.11.19-2";
+let updateOffered = false;
+async function checkForUpdate() {
+  if (updateOffered || location.protocol === "file:") return;
+  try {
+    const r = await fetch(location.pathname + "?v=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) return;
+    const m = (await r.text()).match(/const APP_VERSION = "([^"]+)"/);
+    if (m && m[1] !== APP_VERSION) {
+      updateOffered = true;
+      showUpdateBar();
+    }
+  } catch {}
+}
+function showUpdateBar() {
+  const bar = document.createElement("div");
+  bar.className = "updatebar";
+  bar.innerHTML = `<span>A new version of MyStream is ready.</span><button class="btn small">Reload</button>`;
+  bar.querySelector("button").onclick = () => location.reload();
+  document.body.appendChild(bar);
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForUpdate(); });
+setTimeout(checkForUpdate, 3000);
 
 render();
 startAccounts();
