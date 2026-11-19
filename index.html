@@ -373,6 +373,38 @@ body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
 .cmrow:last-child{border-bottom:0}
 .cmrow input{flex:1;min-width:0;height:38px;border:1px solid transparent;border-radius:8px;background:transparent;padding:0 8px;font-size:16px}
 .cmrow input:focus{border-color:var(--accent);background:var(--surface);outline:none}
+#landing{position:fixed;inset:0;z-index:40;overflow-y:auto;background:radial-gradient(120% 80% at 50% 0%,#2b2f3a 0%,#14161c 60%);color:#eceef2;
+  padding:calc(env(safe-area-inset-top) + 28px) 20px calc(env(safe-area-inset-bottom) + 28px)}
+body.landing-on{overflow:hidden}
+.ld-wrap{max-width:560px;margin:0 auto}
+.ld-hero{text-align:center}
+.ld-icon{width:92px;height:92px;margin:8px auto 14px;filter:drop-shadow(0 10px 24px rgba(0,0,0,.45))}
+.ld-icon svg{width:100%;height:100%}
+#landing h1{font-size:34px;letter-spacing:-.02em}
+.ld-tag{font-size:18px;line-height:1.45;color:#c9ccd4;margin:10px auto 22px;max-width:420px}
+.ld-cta{display:flex;flex-direction:column;gap:10px;max-width:340px;margin:0 auto}
+.ld-cta .btn{height:50px;font-size:17px}
+#landing .btn.ghost{background:rgba(255,255,255,.1);color:#fff}
+#landing .linkish{color:#f5b942;margin-top:14px}
+.ld-feats{display:flex;flex-direction:column;gap:12px;margin:30px 0 18px}
+.ld-feat{display:flex;gap:14px;align-items:flex-start;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:14px}
+.ld-fi{flex:none;width:36px;height:36px;border-radius:10px;background:#f5b942;color:#1a1406;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px}
+.ld-feat b{font-size:16px}
+.ld-feat p{color:#b8bcc6;font-size:14px;line-height:1.45;margin-top:2px}
+.ld-foot{text-align:center;font-size:13px;color:#8c909b}
+#tutorial{position:fixed;inset:0;z-index:45;background:rgba(10,12,16,.6);display:flex;align-items:center;justify-content:center;padding:20px}
+.tu-card{position:relative;width:100%;max-width:400px;background:var(--surface);border-radius:20px;padding:28px 22px 20px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+.tu-skip{position:absolute;right:14px;top:12px;color:var(--muted);font-weight:600;font-size:14px;padding:6px}
+.tu-icon{width:72px;height:72px;margin:6px auto 14px;border-radius:20px;background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:800}
+.tu-icon svg{width:72px;height:72px}
+.tu-card h2{font-size:21px;margin-bottom:8px}
+.tu-card p{color:var(--muted);font-size:15px;line-height:1.5;min-height:92px}
+.tu-dots{display:flex;justify-content:center;gap:6px;margin:16px 0}
+.tu-dots span{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.tu-dots span.on{background:var(--accent);width:20px;border-radius:4px}
+.tu-nav{display:flex;justify-content:space-between;gap:10px}
+.tu-nav .btn{flex:1;height:46px}
+.tu-nav span{flex:1}
 .count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;align-self:flex-start;padding-top:2px}
 .empty{text-align:center;color:var(--muted);padding:56px 16px}
 .empty h2{color:var(--text);font-size:20px;margin-bottom:6px}
@@ -1192,6 +1224,7 @@ function openMainMenu() {
   const u = account.user;
   sheet(`
     <h2 class="sheet-title">Settings</h2>
+    <button class="btn ghost" data-a="tour">How to use MyStream</button>
     <h3>My streaming services</h3>
     <p>${mySubs() ? (mySubs().length ? "You pay for: " + mySubs().map(esc).join(", ") + "." : "No subscriptions picked.") : "Pick the services you pay for, so Explore shows what you can watch."}
       ${myFree().length ? `<br>Free: ${myFree().map(esc).join(", ")}.` : "<br>No free services picked."}</p>
@@ -1226,6 +1259,7 @@ function openMainMenu() {
     on("subs", () => { close(); openServicesPicker(openMainMenu); });
     on("exset", () => { close(); openExploreSettings(); });
     on("cats", () => { close(); openCategoryManager(); });
+    on("tour", () => { close(); openTutorial(); });
   });
 }
 function exportBackup() {
@@ -2170,6 +2204,7 @@ function openServicesPicker(after, opts = {}) {
     m.querySelector('[data-a="save"]').onclick = () => {
       saveServiceChoices(m);
       saveDb(); close(); pickerOpen = false; toast(opts.signup ? "You're all set." : "Saved your services.");
+      if (opts.signup) maybeTutorial();
       if (location.hash === "#/explore") { drawExploreControls(); loadExplore(true); } else refresh();
       if (after) after();
     };
@@ -3136,6 +3171,8 @@ function openAccountSheet(mode) {
         await (reg ? backend.signUp(email, pass) : backend.signIn(email, pass));
         close();
         toast(reg ? "Account created. Your list is being saved." : "Signed in.");
+        hideLanding();
+        if (reg) maybeTutorial();
       } catch (e) {
         showErr(authMsg(e));
         btn.disabled = false; btn.textContent = reg ? "Create account" : "Sign in";
@@ -3147,7 +3184,7 @@ function openAccountSheet(mode) {
         if (!backend || !backend.signInGoogle) throw { code: "auth/network-request-failed" };
         const ticked = reg ? [...m.querySelectorAll(".subpick input:checked")].map(i => i.value) : null;
         await backend.signInGoogle();
-        close();
+        close(); hideLanding();
         if (reg) openServicesPicker(null, { signup: true, paid: ticked.filter(n => PAID_SERVICES.includes(n)).concat(mySubs() || []),
                                             free: ticked.some(n => FREE_SERVICES.includes(n)) ? ticked.filter(n => FREE_SERVICES.includes(n)) : myFree() });
         else toast("Signed in.");
@@ -3211,7 +3248,7 @@ async function startAccounts() {
 /* ---------- app version + "new version ready" ---------- */
 // Bump APP_VERSION with every release. Phones (especially home-screen apps) can keep an old copy for a while;
 // this checks the live page and offers a reload when a newer version is published.
-const APP_VERSION = "2026.11.19-8";
+const APP_VERSION = "2026.11.19-9";
 let updateOffered = false;
 async function checkForUpdate() {
   if (updateOffered || location.protocol === "file:") return;
@@ -3235,7 +3272,93 @@ function showUpdateBar() {
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkForUpdate(); });
 setTimeout(checkForUpdate, 3000);
 
+/* ---------- welcome page (first visit) + tutorial ---------- */
+const ICONSVG = `<svg viewBox="0 0 512 512" aria-hidden="true"><defs><linearGradient id="lgg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffd27a"/><stop offset="1" stop-color="#f0a92e"/></linearGradient></defs>
+  <rect width="512" height="512" rx="112" fill="#1d2028"/><rect x="104" y="104" width="304" height="212" rx="44" fill="none" stroke="url(#lgg)" stroke-width="30"/>
+  <path d="M228 162 L310 210 L228 258 Z" fill="url(#lgg)" stroke="url(#lgg)" stroke-width="18" stroke-linejoin="round"/>
+  <path d="M112 372 q36 -30 72 0 t72 0 t72 0 t72 0" fill="none" stroke="url(#lgg)" stroke-width="26" stroke-linecap="round"/>
+  <path d="M148 424 q36 -30 72 0 t72 0 t72 0" fill="none" stroke="#f5b942" stroke-opacity=".45" stroke-width="22" stroke-linecap="round"/></svg>`;
+function isNewVisitor() {
+  const h = location.hash.replace(/^#\/?/, "");
+  if (h && h !== "/") return false;                       // opened a link to somewhere specific (e.g. an invite)
+  if (db.linkedUid || settings().seenWelcome) return false;
+  return !Object.values(db.lists).some(L => Object.keys(L.shows || {}).length || Object.keys(L.movies || {}).length);
+}
+function showLanding() {
+  const el = document.createElement("div");
+  el.id = "landing";
+  el.innerHTML = `
+    <div class="ld-wrap">
+      <div class="ld-hero">
+        <div class="ld-icon">${ICONSVG}</div>
+        <h1>MyStream</h1>
+        <p class="ld-tag">Every show and movie you're watching, on every service, in one simple list.</p>
+        <div class="ld-cta">
+          <button class="btn ld-main" id="ldStart">Create free account</button>
+          <button class="btn ghost" id="ldTry">Try it first</button>
+        </div>
+        <button class="linkish" id="ldSignIn">Already have an account? Sign in</button>
+      </div>
+      <div class="ld-feats">
+        ${[["✓", "Never lose your place", "Check off episodes as you go. MyStream shows what's next and when new episodes come out."],
+           ["▶", "Know where it streams", "Each show knows its service, with a button that takes you there to watch."],
+           ["◎", "Find something new", "Explore what's popular on the services you pay for, plus free ones like Tubi and The Roku Channel."],
+           ["♥", "Favorites for rewatching", "Save comfort shows, sort them into categories, rank your top movies, or let it pick one for you."],
+           ["☁", "On all your devices", "A free account saves your list and keeps your phone and computer in sync."]]
+          .map(([i, t, d]) => `<div class="ld-feat"><span class="ld-fi">${i}</span><div><b>${t}</b><p>${d}</p></div></div>`).join("")}
+      </div>
+      <p class="ld-foot">Free. No ads. Show info from TVMaze and TMDB.</p>
+    </div>`;
+  document.body.appendChild(el);
+  document.body.classList.add("landing-on");
+  const done = () => { settings().seenWelcome = true; writeLocal(); hideLanding(); };
+  el.querySelector("#ldStart").onclick = () => { done(); openAccountSheet("register"); };
+  el.querySelector("#ldSignIn").onclick = () => { done(); openAccountSheet("signin"); };
+  el.querySelector("#ldTry").onclick = () => { done(); openTutorial(); };
+}
+function hideLanding() { const el = $("#landing"); if (el) el.remove(); document.body.classList.remove("landing-on"); }
+
+const TUTORIAL = [
+  ["👋", "Welcome to MyStream", "A quick tour: seven cards, about 30 seconds. Swipe or tap Next."],
+  ["＋", "Add what you're watching", "Tap the gold ＋ at the top to search for a show or movie. The ★ puts it on your Watching list, and the ♥ saves it to Favorites. Tap a result to see more first."],
+  ["✓", "Check off episodes", "Open a show to tick episodes as you watch, or tap Mark all as watched. Your list sorts itself into In progress, Haven't started and Caught up. Tap a heading to fold it away."],
+  ["⇄", "TV shows or Movies", "The switch under the tabs flips every page between TV shows and Movies. Graphic / Minimal swaps posters for a compact list."],
+  ["◎", "Explore what's new", "Explore shows what's popular on your services. Filter by service, genre or sort. ✓ means you've seen it, and the eye hides it, so you can work down the list."],
+  ["♥", "Favorites for rewatching", "Sort favorites into categories like Rewatch or Bedtime, rank your top movies, or tap Pick one for me when you can't decide."],
+  ["⚙", "Make it yours", "The gear holds your streaming services, favorite categories, account and backup. You can reopen this tour there any time."]
+];
+function openTutorial(step = 0) {
+  $("#tutorial") && $("#tutorial").remove();
+  const el = document.createElement("div");
+  el.id = "tutorial";
+  el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true"); el.setAttribute("aria-label", "How to use MyStream");
+  const finish = () => { settings().tutorialDone = true; saveDb(); el.remove(); };
+  const draw = () => {
+    const [icon, title, text] = TUTORIAL[step], last = step === TUTORIAL.length - 1;
+    el.innerHTML = `<div class="tu-card">
+      <button class="tu-skip" data-t="skip">${last ? "" : "Skip"}</button>
+      <div class="tu-icon">${step === 0 ? ICONSVG : icon}</div>
+      <h2>${title}</h2><p>${text}</p>
+      <div class="tu-dots">${TUTORIAL.map((_, i) => `<span class="${i === step ? "on" : ""}"></span>`).join("")}</div>
+      <div class="tu-nav">${step ? `<button class="btn ghost" data-t="back">Back</button>` : `<span></span>`}
+        <button class="btn" data-t="next">${last ? "Start watching" : "Next"}</button></div></div>`;
+    el.querySelector('[data-t="next"]').onclick = () => last ? finish() : (step++, draw());
+    const bk = el.querySelector('[data-t="back"]'); if (bk) bk.onclick = () => { step--; draw(); };
+    el.querySelector('[data-t="skip"]').onclick = finish;
+  };
+  let x0 = null;   // swipe left/right between cards
+  el.addEventListener("touchstart", e => { x0 = e.touches[0].clientX; }, { passive: true });
+  el.addEventListener("touchend", e => {
+    if (x0 === null) return; const dx = e.changedTouches[0].clientX - x0; x0 = null;
+    if (dx < -50 && step < TUTORIAL.length - 1) { step++; draw(); } else if (dx > 50 && step > 0) { step--; draw(); }
+  });
+  draw();
+  document.body.appendChild(el);
+}
+const maybeTutorial = () => { if (!settings().tutorialDone) setTimeout(() => openTutorial(), 500); };
+
 render();
+if (isNewVisitor()) showLanding();
 startAccounts();
 })();
 </script>
