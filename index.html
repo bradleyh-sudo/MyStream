@@ -357,6 +357,14 @@ body.has-bulk{padding-bottom:calc(env(safe-area-inset-bottom) + 150px)}
   display:flex;align-items:center;gap:12px;background:var(--accent);color:var(--accent-ink);border-radius:14px;padding:10px 10px 10px 16px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.25)}
 .updatebar span{flex:1}
 .updatebar .btn{background:var(--accent-ink);color:var(--accent)}
+.rankhead{margin:4px 0 10px}
+.rankhead h2{font-size:20px}
+.frank{flex:none;min-width:30px;height:30px;padding:0 6px;border-radius:999px;background:var(--surface2);color:var(--text);font-weight:800;font-size:14px;font-variant-numeric:tabular-nums}
+.frank.top1{background:#f5c542;color:#3b2a00}
+.frank.top2{background:#cfd4dc;color:#22262d}
+.frank.top3{background:#d9a06b;color:#2e1a08}
+.rankquick{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sheet .rankquick .btn{width:100%;height:40px}
 .count{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;flex:none;align-self:flex-start;padding-top:2px}
 .empty{text-align:center;color:var(--muted);padding:56px 16px}
 .empty h2{color:var(--text);font-size:20px;margin-bottom:6px}
@@ -1051,6 +1059,7 @@ function dragEnd(commit) {
 }
 // Save a group's order after a drag. ids = what's on screen, in its new order; anything hidden by a filter keeps its place.
 function saveGroupOrder(key, ids) {
+  if (key === "favrank") return saveFavRank(ids);
   const full = (watchingGroups()[key] || []).map(x => x.s || x);
   const byId = new Map(full.map(it => [String(it.id), it]));
   const queue = ids.map(id => byId.get(String(id))).filter(Boolean), shown = new Set(queue);
@@ -1708,15 +1717,42 @@ function favToast(kind, id, alsoAdded) {
                            : toast(`${name} added to Favorites.`, "Pick category", () => openCategorySheet(kind, id));
   else toast(`${name} removed from Favorites.`);
 }
+// Movie favorites are your ranked top list: favRank 0 = #1 (synced with the list). New favorites start at the bottom.
+const byFavRank = (a, b) => ((a.it.favRank ?? 1e9) - (b.it.favRank ?? 1e9)) || (a.it.addedAt || 0) - (b.it.addedAt || 0) || (a.name || "").localeCompare(b.name || "");
+let favRankOf = new Map();
+function saveFavRank(ids) {   // ids = movies on screen in their new order; ones hidden by a category keep their places
+  const full = allFavorites().map(f => f.it);
+  const byId = new Map(full.map(it => [String(it.id), it]));
+  const queue = ids.map(id => byId.get(String(id))).filter(Boolean), shown = new Set(queue);
+  full.map(it => shown.has(it) ? queue.shift() : it).forEach((it, i) => { it.favRank = i; });
+  saveDb(); renderFavorites();
+}
+function moveFavRank(id, to) {   // put one movie at rank "to" (1-based)
+  const ids = allFavorites().map(f => String(f.id)).filter(x => x !== String(id));
+  ids.splice(Math.max(0, Math.min(ids.length, to - 1)), 0, String(id));
+  favFilter = "All"; saveFavRank(ids);
+}
+function openRankSheet(id) {
+  const favs = allFavorites(), cur = favRankOf.get(String(id)), it = db.movies[id];
+  sheet(`<h3>Rank ${esc(it.title)}</h3><p>Currently #${cur} of ${favs.length}.</p>
+    <form class="search" id="rankForm" style="margin:0"><input id="rankTo" type="number" inputmode="numeric" min="1" max="${favs.length}" value="${cur}"><button class="btn" type="submit">Move</button></form>
+    <div class="rankquick"><button class="btn ghost small" data-to="1">To #1</button><button class="btn ghost small" data-to="${Math.max(1, cur - 1)}">Up one</button><button class="btn ghost small" data-to="${Math.min(favs.length, cur + 1)}">Down one</button><button class="btn ghost small" data-to="${favs.length}">To bottom</button></div>`,
+    (m, close) => {
+      const go2 = to => { close(); moveFavRank(id, to); toast(`${it.title} is now #${Math.max(1, Math.min(favs.length, to))}.`); };
+      m.querySelector("#rankForm").onsubmit = e => { e.preventDefault(); const v = parseInt(m.querySelector("#rankTo").value, 10); if (v > 0) go2(v); };
+      m.querySelectorAll("[data-to]").forEach(b => b.onclick = () => go2(+b.dataset.to));
+    });
+}
 function allFavorites() {
   const m = mode();
   return [
     ...(m === "tv" ? Object.values(db.shows).filter(s => s.fav).map(s => ({ kind: "show", id: s.id, it: s, name: s.name })) : []),
     ...(m === "movie" ? Object.values(db.movies || {}).filter(x => x.fav).map(x => ({ kind: "movie", id: x.id, it: x, name: x.title })) : [])
-  ].sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+  ].sort(m === "movie" ? byFavRank : (a, b) => (a.name || "").localeCompare(b.name || ""));
 }
 function renderFavorites() {
   const favs = allFavorites();
+  favRankOf = new Map(favs.map((f, i) => [String(f.id), i + 1]));
   const cats = favCategories();
   if (favFilter !== "All" && favFilter !== "None" && !cats.includes(favFilter)) favFilter = "All";
   const count = c => favs.filter(f => (f.it.favCats || []).includes(c)).length;
@@ -1734,7 +1770,8 @@ function renderFavorites() {
       <button class="btn ghost small" id="favPick">${ICON.dice.replace("<svg", '<svg width="16" height="16"')} Pick one for me</button></div>` : ""}
     ${favs.length ? `
       ${cats.includes(favFilter) ? `<div class="tabtools catedit"><button class="btn ghost small" id="editCat">${shown.length ? "Add or remove favorites" : `Add favorites to ${esc(favFilter)}`}</button></div>` : ""}
-      ${shown.length ? `<div class="rows favrows ${look() === "text" ? "notext-art" : ""}">${shown.map(favRowHtml).join("")}</div>`
+      ${mode() === "movie" && shown.length ? `<div class="rankhead"><h2>My top movies</h2><p class="sub">Hold and drag a movie to move it, or tap its number.</p></div>` : ""}
+      ${shown.length ? `<div class="rows favrows ${look() === "text" ? "notext-art" : ""}" ${mode() === "movie" ? `data-group="favrank"` : ""}>${shown.map(favRowHtml).join("")}</div>`
         : `<p class="empty">Nothing in ${esc(favFilter === "None" ? "No category" : favFilter)} yet.</p>`}
     ` : `
       <div class="empty">
@@ -1755,6 +1792,7 @@ function renderFavorites() {
     const { kind, id } = r.dataset;
     if (e.target.closest("[data-heart]")) return setFav(kind, id, false);
     if (e.target.closest("[data-cats]")) return openCategorySheet(kind, id);
+    if (e.target.closest("[data-rank]")) return openRankSheet(id);
     kind === "show" ? go("/show/" + id) : openExploreItem("movie", id);
   });
 }
@@ -1766,14 +1804,17 @@ function favRowHtml(f) {
     const ns = new Set(reg.map(e => e.s)).size;
     sub = reg.length ? `${ns} season${ns === 1 ? "" : "s"} · ${reg.length} eps` : "TV show";
   } else sub = [it.year, "Movie"].filter(Boolean).join(" · ");
-  if (look() === "text") return `<div class="row favrow compact" data-kind="${f.kind}" data-id="${f.id}" role="button" tabindex="0">
-    ${serviceIcon(it.service, 18)}
+  const rk = f.kind === "movie" ? favRankOf.get(String(f.id)) : 0;
+  const rankBtn = rk ? `<button class="frank ${rk <= 3 ? "top" + rk : ""}" data-rank aria-label="Rank ${rk}: change">${rk}</button>` : "";
+  const dm = f.kind === "movie" ? `data-movie="${f.id}"` : "";
+  if (look() === "text") return `<div class="row favrow compact" data-kind="${f.kind}" data-id="${f.id}" ${dm} role="button" tabindex="0">
+    ${rankBtn}${serviceIcon(it.service, 18)}
     <span class="rn">${esc(f.name)}</span>
     <span class="fcats">${cats.map(c => `<span class="catpill">${esc(c)}</span>`).join("")}<button class="catbtn" data-cats aria-label="Categories for ${esc(f.name)}">${cats.length ? "Edit" : "+ Cat"}</button></span>
     ${heartBtn(true, f.name, "sm")}
   </div>`;
-  return `<div class="row favrow" data-kind="${f.kind}" data-id="${f.id}" role="button" tabindex="0">
-    ${posterHtml(f.kind === "show" ? it.image : it.poster, f.name, "poster mini")}
+  return `<div class="row favrow" data-kind="${f.kind}" data-id="${f.id}" ${dm} role="button" tabindex="0">
+    ${rankBtn}${posterHtml(f.kind === "show" ? it.image : it.poster, f.name, "poster mini")}
     <div class="fbody">
       <div class="rn">${esc(f.name)}</div>
       <div class="fsub">${serviceIcon(it.service, 16)}<span>${esc(it.service || "No service")}</span><span class="dot">·</span><span>${esc(sub)}</span></div>
@@ -3062,7 +3103,7 @@ async function startAccounts() {
 /* ---------- app version + "new version ready" ---------- */
 // Bump APP_VERSION with every release. Phones (especially home-screen apps) can keep an old copy for a while;
 // this checks the live page and offers a reload when a newer version is published.
-const APP_VERSION = "2026.11.19-3";
+const APP_VERSION = "2026.11.19-4";
 let updateOffered = false;
 async function checkForUpdate() {
   if (updateOffered || location.protocol === "file:") return;
